@@ -1,5 +1,6 @@
-window.TOCCATA_EN = {"通用配置":"General settings","设置":"Settings",
+window.TOCCATA_EN = {"通用配置":"General settings","设置":"Settings","拖动排序":"Drag to reorder","等待输入法确认…":"Waiting for composition…","父任务已不存在":"The parent task no longer exists",
   "演示数据": "Sample data",
+  "有未保存的修改": "Unsaved changes",
   "关于 Toccata": "About Toccata",
   "记下想法，看见投入": "Capture ideas. See your effort.",
   "已复制版本信息": "Version info copied",

@@ -644,7 +644,7 @@ function normalizeEditor() {
 
 function flushEditor() {
     clearTimeout(normalizeTimer);
-    if (composing) { notify(); }
+    if (composing) { return false; }
     else { normalizeEditor(); }
 }
 
@@ -703,10 +703,12 @@ editor.addEventListener('input', event => {
 });
 editor.addEventListener('compositionstart', () => {
     composing = true;
+    window.parent.postMessage({type: 'toccata-composition', composing: true}, '*');
     clearTimeout(normalizeTimer);
 });
 editor.addEventListener('compositionend', () => {
     composing = false;
+    window.parent.postMessage({type: 'toccata-composition', composing: false}, '*');
     scheduleNormalize();
 });
 editor.addEventListener('focus', () => {
@@ -720,6 +722,13 @@ editor.addEventListener('paste', event => {
     event.preventDefault();
     insertPlainText(event.clipboardData.getData('text/plain'));
 });
+document.addEventListener('keydown', event => {
+    if (event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        window.parent.postMessage({type: 'toccata-save-request'}, '*');
+    }
+}, true);
 editor.addEventListener('keydown', event => {
     if (event.key === 'Tab') {
         event.preventDefault();
@@ -745,7 +754,7 @@ window.addEventListener('message', event => {
     else if (event.data?.type === 'toccata-focus') focusEditor();
     else if (event.data?.type === 'toccata-flush') {
         flushEditor();
-        window.parent.postMessage({type: 'toccata-flushed', request: event.data.request, snapshot: markdownSnapshot()}, '*');
+        window.parent.postMessage({type: 'toccata-flushed', request: event.data.request, snapshot: composing ? null : markdownSnapshot(), composing}, '*');
     }
 });
 </script>

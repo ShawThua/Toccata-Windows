@@ -1,4 +1,24 @@
 /* Scoped Windows preferences and tray overview; shared with the existing themes. */
+.detail-bar{gap:6px;padding-inline:14px}
+.detail-heading{display:flex;align-items:center;gap:6px;min-width:0}
+.detail-heading>span:last-child{overflow:hidden;text-overflow:ellipsis}
+.detail-heading>.ico{flex-shrink:0}
+.detail-pane{container-name:task-detail;container-type:inline-size}
+@container task-detail (max-width:430px){.detail-heading>span:last-child{display:none}.detail-bar #save-status{min-width:3em}}
+#save-status{font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:1}
+.task-save-button{width:30px;height:30px;min-width:30px;padding:5px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);color:var(--accent);background:var(--subtle);flex-shrink:0}
+.task-save-button:hover{background:color-mix(in srgb,var(--accent) 10%,var(--section))}
+.task-save-button:focus-visible,.task-parent-link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.task-save-button:disabled{opacity:.5;cursor:wait}
+.task-save-button svg{display:block;flex-shrink:0}
+.task-parent-link{display:flex;align-items:center;gap:6px;max-width:100%;padding:6px 8px;margin:-8px -8px 13px;border-radius:7px;color:var(--accent);font-size:12px;text-align:left}
+.task-parent-link:hover{background:var(--select)}
+.task-parent-link>.ico{flex-shrink:0;width:14px;height:14px}
+.task-parent-link>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.floating-bar{gap:7px}
+.floating-bar #save-status{font-size:10px;max-width:82px}
+.floating-bar .task-save-button{height:27px;width:27px;min-width:27px;padding:4px}
+.floating-content .task-parent-link{margin:0 -5px 8px;padding:4px 5px;font-size:11px}
 /* Priority stays readable as a word as well as a color; green remains completion. */
 [data-priority="0"]{--priority-fg:#586579;--priority-bg:#f1f4f8}
 [data-priority="1"]{--priority-fg:#175da8;--priority-bg:#eaf3ff}
