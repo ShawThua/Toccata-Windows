@@ -8,7 +8,8 @@ const {computeStats}=require('../data/stats');
 // Exercise the actual renderer function without loading Electron or its profile.
 const source=fs.readFileSync(path.join(__dirname,'../renderer/app.js'),'utf8');
 const functionSource=source.slice(source.indexOf('function timeline(stats)'),source.indexOf('function captureLabel()'));
-const context=vm.createContext({h:x=>String(x??''),t:x=>x,duration:x=>x==null?'unavailable':String(x),dateStart:s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}});
+const context=vm.createContext({window:{},state:{language:'zh'},h:x=>String(x??''),t:x=>x,duration:x=>x==null?'unavailable':String(x),dateStart:s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}});
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../renderer/share-card.js'),'utf8'),context);
 vm.runInContext(functionSource,context);
 function renderDay(iso){const [y,m,d]=iso.split('-').map(Number),start=new Date(y,m-1,d).getTime(),end=new Date(y,m-1,d+1).getTime();const stats=computeStats([],{start_ms:start,end_ms:end,now_ms:end});const html=context.timeline(stats);return [...html.matchAll(/class="bucket [^"]*"[^>]*title="([^"]+)"/g)].map(x=>x[1].split(' · ')[0]);}
 function inZone(zone,fn){const previous=process.env.TZ;process.env.TZ=zone;try{fn()}finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous}}

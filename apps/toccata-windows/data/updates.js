@@ -1,9 +1,8 @@
 'use strict';
 
-// Only metadata is fetched. Assets are offered to the user; this module never
-// opens, downloads or installs them.
-const LATEST_RELEASE = 'https://api.github.com/repos/KMnO4-zx/Toccata/releases/latest';
-const RELEASE_PATH = '/KMnO4-zx/Toccata/releases/';
+// The Windows channel belongs to this port; macOS assets are never executable updates.
+const LATEST_RELEASE = 'https://api.github.com/repos/WenNinghan/Toccata-Windows/releases?per_page=30';
+const RELEASE_PATH = '/WenNinghan/Toccata-Windows/releases/';
 
 function parseVersion(value) {
   if (typeof value !== 'string') return null;
@@ -46,24 +45,30 @@ function repositoryUrl(value, pathPrefix) {
 }
 
 function parseRelease(release) {
-  if (!release || typeof release !== 'object' || release.draft === true || release.prerelease === true) return null;
-  const version = parseVersion(release.tag_name);
+  if (!release || typeof release !== 'object' || release.draft === true) return null;
+  const legacy = /^windows-preview-\d{8}$/.test(release.tag_name||'');
+  const version = parseVersion(legacy?'0.1.0':release.tag_name);
   if (!version || !Array.isArray(release.assets)) return null;
   const tag = release.tag_name.trim();
   const releaseLink = repositoryUrl(release.html_url, RELEASE_PATH + 'tag/' + tag);
   const assets = [];
   for (const asset of release.assets) {
-    if (!asset || typeof asset.name !== 'string' || !/\.(exe|msi)$/i.test(asset.name) || /[\\/\x00-\x1f]/.test(asset.name)) continue;
+    if (!asset || typeof asset.name !== 'string' || /[\\/\x00-\x1f]/.test(asset.name)) continue;
+    const compatible=/\.(exe|msi)$/i.test(asset.name)||(/toccata.*windows.*x64\.zip$/i.test(asset.name)&&!/(source|arm64|ia32)/i.test(asset.name));
+    const checksum=/^SHA256SUMS\.txt$/i.test(asset.name)||/\.zip\.sha256$/i.test(asset.name);
+    if(!compatible&&!checksum)continue;
     if (asset.state != null && asset.state !== 'uploaded') continue;
     const assetPrefix = RELEASE_PATH + 'download/' + tag + '/';
     const link = repositoryUrl(asset.browser_download_url, assetPrefix);
     if (!link || link.decoded.slice(assetPrefix.length) !== asset.name) continue;
-    assets.push({ name:asset.name, url:link.url });
+    assets.push({ name:asset.name, url:link.url, size:Number.isSafeInteger(asset.size)?asset.size:null, digest:typeof asset.digest==='string'&&/^sha256:[a-f0-9]{64}$/i.test(asset.digest)?asset.digest.toLowerCase():null, checksum });
   }
   return {
-    version:tag,
+    version:legacy?'0.1.0':tag,
+    tag,
     release_url:releaseLink?.decoded === RELEASE_PATH + 'tag/' + tag ? releaseLink.url : null,
-    assets,
+    assets:assets.filter(a=>!a.checksum),
+    checksum:assets.find(a=>a.checksum)||null,
   };
 }
 
@@ -78,9 +83,11 @@ async function checkForUpdates({ currentVersion, fetchImpl = globalThis.fetch } 
       signal:AbortSignal.timeout(10000),
     });
     if (!response || response.ok !== true) return { status:'error', reason:'http-error', http_status:response?.status ?? null };
-    const release = parseRelease(await response.json());
+    const body=await response.json();
+    const release=(Array.isArray(body)?body:[body]).map(parseRelease).filter(Boolean).sort((a,b)=>compareVersions(b.version,a.version))[0];
     if (!release) return { status:'error', reason:'invalid-release' };
-    const base = { current_version:currentVersion, version:release.version, release_url:release.release_url, assets:release.assets };
+    const zip=release.assets.find(a=>a.name.toLowerCase().endsWith('.zip'));
+    const base = { current_version:currentVersion, version:release.version, release_url:release.release_url, assets:release.assets, checksum:release.checksum, can_download:!!zip&&!!(zip.digest||release.checksum) };
     if (release.assets.length === 0) return { status:'no-windows-asset', ...base };
     if (compareVersions(release.version, currentVersion) <= 0) return { status:'up-to-date', ...base };
     return { status:'update-available', ...base };

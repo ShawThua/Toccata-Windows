@@ -1,4 +1,4 @@
-window.TOCCATA_EN = {
+window.TOCCATA_EN = {"通用配置":"General settings","设置":"Settings",
   "演示数据": "Sample data",
   "关于 Toccata": "About Toccata",
   "记下想法，看见投入": "Capture ideas. See your effort.",

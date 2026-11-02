@@ -122,6 +122,8 @@ class TaskStore {
       const nextPriority = priority === undefined ? task.priority : priority;
       if (!Number.isInteger(nextPriority) || nextPriority < 0 || nextPriority > 3)
         throw new RangeError('优先级必须为 0–3');
+      if (task.title === nextTitle && task.details === nextDetails &&
+          task.planned_at === nextPlan && task.priority === nextPriority) return task;
       this.db.prepare('UPDATE tasks SET title=?,details=?,planned_at=?,priority=?,updated_at=? WHERE id=?')
         .run(nextTitle, nextDetails, nextPlan, nextPriority, this.currentTime(), id);
       return this.requireTask(id);

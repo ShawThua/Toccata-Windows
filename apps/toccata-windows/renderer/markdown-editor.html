@@ -347,8 +347,12 @@ function markdownSnapshot() {
     return { text: getMarkdown(true), revision: ++markdownRevision };
 }
 
+let lastNotifiedText;
 function notify() {
-    window.parent.postMessage({type: 'toccata-markdown', snapshot: markdownSnapshot()}, '*');
+    const snapshot = markdownSnapshot();
+    if (snapshot.text === lastNotifiedText) return;
+    lastNotifiedText = snapshot.text;
+    window.parent.postMessage({type: 'toccata-markdown', snapshot}, '*');
 }
 
 function captureCaret() {
@@ -630,11 +634,12 @@ function normalizeEditor() {
     if (composing) { return; }
     clearTimeout(normalizeTimer);
     const caret = captureCaret();
+    const focused = document.hasFocus() && (document.activeElement === editor || editor.contains(document.activeElement));
     normalizeRootTextBlocks(caret);
     formatInlineElements(caret);
     formatBlocks(caret);
     notify();
-    restoreCaret(caret);
+    if (focused) restoreCaret(caret);
 }
 
 function flushEditor() {
@@ -733,7 +738,7 @@ function applyPresentation(data) {
 window.addEventListener('message', event => {
     if (event.source !== window.parent) return;
     if (event.data?.type === 'toccata-init') {
-        try { applyPresentation(event.data); setMarkdown(String(event.data.markdown || '')); window.parent.postMessage({type: 'toccata-ready', ready: true}, '*'); }
+        try { applyPresentation(event.data); setMarkdown(String(event.data.markdown || '')); lastNotifiedText = getMarkdown(true); window.parent.postMessage({type: 'toccata-ready', ready: true, snapshot: {text: lastNotifiedText}}, '*'); }
         catch (_) { window.parent.postMessage({type: 'toccata-ready', ready: false}, '*'); }
     }
     else if (event.data?.type === 'toccata-style') applyPresentation(event.data);

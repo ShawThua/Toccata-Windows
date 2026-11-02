@@ -24,6 +24,13 @@
     const english=language==='en', value=Math.round(rate).toLocaleString(english?'en-US':'zh-CN');
     return english ? `${value}/${compact?'min':'active min'}` : `${value} 次/${compact?'分':'活跃分钟'}`;
   }
+  // Use all presses in the selected period, including keys outside the chosen
+  // physical layout. Match upstream's bounded, at-most-one-decimal percentage.
+  function keyUsagePercent(count, total, language='zh') {
+    if (!Number.isFinite(count) || count < 0 || !Number.isFinite(total) || total <= 0) return '0%';
+    const percentage=Math.min(1,count/total)*100;
+    return `${(Math.round(percentage*10)/10).toLocaleString(language==='en'?'en-US':'zh-CN',{maximumFractionDigits:1})}%`;
+  }
   function duration(ms, lang) {
     if (ms === null || ms === undefined) return words[lang].unavailable;
     const seconds = Math.floor(num(ms) / 1000), h = Math.floor(seconds / 3600), m = Math.floor(seconds % 3600 / 60), s = seconds % 60;
@@ -137,7 +144,7 @@
     else {
       ctx.fillStyle=palette.border;ctx.fillRect(32,rankY-4,656,1);
       const width=656/ranked.length;
-      ranked.forEach((item,i)=>{const cx=32+width*(i+.5);rounded(ctx,cx-36,rankY+7,72,28,5,'#f1f3f8');text(ctx,rankedKeyLabel(item.key,lang,String(layout.id||'').startsWith('windows')),cx,rankY+27,17,palette.ink,'400','center',68);text(ctx,cellCountLabel(item.count,lang),cx,rankY+59,16,palette.muted,'400','center',width-5)});
+      ranked.forEach((item,i)=>{const cx=32+width*(i+.5);rounded(ctx,cx-36,rankY+7,72,28,5,'#f1f3f8');text(ctx,rankedKeyLabel(item.key,lang,String(layout.id||'').startsWith('windows')),cx,rankY+27,17,palette.ink,'400','center',68);text(ctx,cellCountLabel(item.count,lang),cx,rankY+59,16,palette.muted,'400','center',width-5);text(ctx,`${lang==='en'?'Share':'占'} ${keyUsagePercent(item.count,stats.key_count,lang)}`,cx,rankY+80,17,palette.blue,'500','center',width-5)});
     }
     rounded(ctx,18,timelineTop,684,timelineHeight,16,palette.white);heading(ctx,w.timeline,w.timelineHint,timelineTop+36);
     ['00:00','06:00','12:00','18:00','24:00'].forEach((label,i)=>text(ctx,label,32+656*i/4,timelineTop+60,15,palette.muted,'400',i===0?'left':i===4?'right':'center'));
@@ -165,5 +172,5 @@
     text(ctx,'github.com/KMnO4-zx/Toccata',20,height-14,17,palette.blue);
     return canvas;
   }
-  root.ToccataShareCard=Object.freeze({render,keyboardGeometry,keyHeat,keystrokeRate,formatKeystrokeRate});
+  root.ToccataShareCard=Object.freeze({render,keyboardGeometry,keyHeat,keystrokeRate,formatKeystrokeRate,keyUsagePercent});
 })(window);

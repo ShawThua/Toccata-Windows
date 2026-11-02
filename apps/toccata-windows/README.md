@@ -1,6 +1,6 @@
 # Toccata Windows 移植预览版
 
-此目录是基于 [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata) 0.1.0 的非官方 Windows 桌面移植，对照基线为 `4e3f89e4ceee03033e49722d162158f51bbea743`。目标是保留原有任务、统计和托盘交互，并采用 Windows 窗口与视觉风格。键盘热图支持 68、84、87、104 键代表性预设和用户自定义。此版本仍在调试和逐项验收，不能视为完整稳定版。用户使用及已知问题见 [Windows 预览说明](../../docs/windows-preview.md)。
+此目录是 [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata) 的非官方 Windows 桌面移植。初始对照基线为 0.1.0 的 `4e3f89e4ceee03033e49722d162158f51bbea743`；当前预览版 `0.1.3-win.1` 已参考上游 `35b266d`（v0.1.3 / build 21）补充通用配置、喝水提醒、托盘活动、按键占比与 Windows 更新流程。目标是保留原有任务、统计和托盘交互，并采用 Windows 窗口与视觉风格。键盘热图支持 68、84、87、104 键代表性预设和用户自定义。此版本仍在逐项验收，不能视为完整稳定版。用户使用及已知问题见 [Windows 预览说明](../../docs/windows-preview.md)。
 
 ## 本地开发
 
@@ -41,7 +41,7 @@ npm start
 
 在此目录执行 `npm run build:native` 后执行 `npm run pack`。程序位于 `dist/win-unpacked/Toccata.exe`，需要和同目录其他文件一起保留。构建保留上游图标和 Apache-2.0 许可证，Fluent UI 图标保留 Microsoft MIT 声明，详情见 [第三方说明](THIRD-PARTY-NOTICES.md)。尚未配置代码签名证书；构建不上传或发布任何文件。
 
-分享程序时只打包 `win-unpacked` 的完整文件组，另附用户说明与许可证；不要把同级 `Toccata-data`、开发数据、依赖目录、日志或 QA profile 一起打包。本预览构建的内部版本暂仍为 `0.1.0`，发布日期与 Preview 标记以交付包说明为准。当前“检查更新”仍查询上游，且不接受预发布或 ZIP 附件，不能用于更新本 Windows 预览包；请手动下载后按使用说明升级。
+分享程序时只打包 `win-unpacked` 的完整文件组，另附用户说明与许可证；不要把同级 `Toccata-data`、开发数据、依赖目录、日志或 QA profile 一起打包。当前预览版为 `0.1.3-win.1`，见 [迁移说明](../../docs/windows-upstream-v013.md) 与 [发布页](https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.3-win.1)。更新使用 Windows Fork 的预发布渠道，支持 ZIP、校验、进度、取消和用户触发的安装回滚。旧的 2026-10-29 公开包需要先手动升级。构建命令本身不会发布；发布资产应包含 `Toccata-Windows-v0.1.3-win.1-x64.zip`、`Toccata-Windows-source-v0.1.3-win.1.zip` 和 `SHA256SUMS.txt`。
 
 ## 调整键盘布局
 
@@ -57,11 +57,11 @@ npm start
 
 ### 验证范围
 
-- `npm test` 运行任务、键盘映射、统计、分享、更新检查与 Electron 任务数据库集成测试。`node --test tests/visual-smoke.cjs` 用独立数据运行六页面截图检查；`node --test tests/capture-smoke.cjs` 会短暂启用真实采集 helper，只检查其启动和退出，键盘数据只在内存中，运行前需告知电脑使用者。
+- `npm test` 串行运行任务、键盘映射、统计、分享、设置、喝水提醒、更新检查/安装回滚及 Electron 界面集成测试，包含持续输入、计划日期和优先级颜色回归。`node --test tests/packaged-smoke.cjs` 检查已打包程序的启动、写入、退出和重启持久化。`node --test tests/visual-smoke.cjs` 用独立数据运行六页面截图检查；`node --test tests/capture-smoke.cjs` 会短暂启用真实采集 helper，只检查其启动和退出，键盘数据只在内存中，运行前需告知电脑使用者。
 - Windows 键盘事件按设备、扫描码和扩展标记区分。Fn 可能由硬件处理且不传到系统；无法检测时界面显示不可用。Pause 和部分 Print Screen/媒体键的硬件事件还需实机验证。
-- 原版与本移植分别依赖不同桌面平台；目前尚不能声称全部界面、系统交互和统计功能已完全等价。尤其多设备、特殊键、长时间运行、多屏、高 DPI、完整 Markdown/托盘和历史导入仍应逐项验收。详细状态见治理设计与测试记录。
-- 源码预览的测试可移植性待补：7 个测试文件仍将测试/截图根目录设为 `G:\DevTools\temp`，无该目录或磁盘的机器不能直接运行完整测试。源码能打包不等于完整测试已在另一台电脑跑通。后续应统一可配置的测试根目录；目前没有自动创建或映射 G 盘的步骤。
-- 既有并行完整测试出现过退出等待超时，单独及串行运行通过，根因未确定。复核时可在本机已有测试环境执行 `node --test --test-concurrency=1 tests/*.test.js tests/electron-smoke.cjs tests/exit-flush.cjs tests/login-start.cjs tests/synthetic-capture.cjs tests/split-icon-smoke.cjs tests/native-window-smoke.cjs tests/layout-integration.cjs`；这不是所有环境都通过的承诺。
+- 原版与本移植分别依赖不同桌面平台；目前尚不能声称全部界面、系统交互和统计功能已完全等价。尤其多设备、特殊键、长时间运行、多屏、高 DPI、完整 Markdown/托盘和历史导入仍应逐项验收。详细状态见 [Windows 预览说明](../../docs/windows-preview.md) 与本目录测试。
+- 源码预览的测试可移植性待补：部分测试文件仍将测试/截图根目录设为 `G:\DevTools\temp`，无该目录或磁盘的机器不能直接运行完整测试。源码能打包不等于完整测试已在另一台电脑跑通。后续应统一可配置的测试根目录；目前没有自动创建或映射 G 盘的步骤。
+- 既有并行完整测试出现过退出等待超时，单独及串行运行通过，根因未确定。当前 `npm test` 已统一使用 `--test-concurrency=1`；这不是所有环境都通过的承诺。
 
 
 

@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Toccata</title>
   <link rel="stylesheet" href="./styles.css">
-</head>
+<link rel="stylesheet" href="./upstream-ui.css"><link rel="stylesheet" href="./windows-features.css"></head>
 <body>
 <div id="app" class="shell">
   <aside class="sidebar">
@@ -59,6 +59,7 @@
         <rect x="15.6" y="6.8" width="3.2" height="11.8" rx="1" fill="#597bb5"/>
         <path d="m5.2 9.6 5.4-3.4 3.1 1.1 4.8-3" fill="none" stroke="#536c9b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg><span data-i18n="ranking">应用与趋势</span></button>
+      <div class="navgroup" data-i18n="settings_group">设置</div><button data-page="settings"><span class="navicon ico ico-settings" aria-hidden="true"></span><span data-i18n="settings">通用配置</span></button>
     </nav>
     <div class="sidebottom"><button id="about" class="about"><span class="ico ico-info" aria-hidden="true"></span> <span data-i18n="about">关于 Toccata</span><span class="version">v0.1.0</span></button>
       <select id="theme" aria-label="外观"><option value="light">浅色</option><option value="dark">深色</option><option value="system">跟随系统</option></select>
@@ -69,6 +70,6 @@
   <main id="main" class="main"></main>
 </div>
 <div id="dialog-root"></div>
-<script src="./date-picker-model.js"></script><script src="./layout.js"></script><script src="./i18n.js"></script><script src="./share-card.js"></script><script src="./layout-editor.js"></script><script src="./app.js"></script>
+<script src="./date-picker-model.js"></script><script src="./layout.js"></script><script src="./i18n.js"></script><script src="./share-card.js"></script><script src="./layout-editor.js"></script><script src="./upstream-ui.js"></script><script src="./windows-features.js"></script><script src="./app.js"></script>
 </body></html>
 

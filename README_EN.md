@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/WenNinghan/Toccata-Windows/releases/tag/windows-preview-20261029">Download Windows Preview</a> ·
+  <a href="https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.3-win.1">Download Windows Preview</a> ·
   <a href="https://github.com/KMnO4-zx/Toccata/releases">Upstream macOS Releases</a> ·
   <a href="develop.md">Developer Guide (Chinese)</a> ·
   <a href="LICENSE">Apache-2.0</a>
@@ -22,11 +22,13 @@
 
 ## Unofficial Windows Preview
 
-This fork provides an **unofficial Windows preview port** of [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata) 0.1.0 under [`apps/toccata-windows`](apps/toccata-windows). It includes native Windows window controls, tasks and tray workflows, keyboard activity statistics, and configurable 68/84/87/104-key layouts. The Windows port replaces the original Fn voice estimate with a keystroke rate based on active minutes.
+The November 2, 2026 preview, `0.1.3-win.1`, ports upstream v0.1.3 / build 21 settings, water reminders, tray activity, key usage percentages and the Windows update flow. It also fixes continuous typing, planned dates and editing across windows. Task priorities use gray, blue, orange and red for none, low, medium and high, with text labels in lists and details. See the [migration notes](docs/windows-upstream-v013.md).
 
-**[Download the Windows 11 x64 preview](https://github.com/WenNinghan/Toccata-Windows/releases/tag/windows-preview-20261029)** · [Light theme](docs/images/windows-preview-light.png) · [Dark theme](docs/images/windows-preview-dark.png)
+This fork provides an **unofficial Windows preview port** of [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata) under [`apps/toccata-windows`](apps/toccata-windows). Originally based on 0.1.0, it now includes the common features added through v0.1.3, native Windows window controls, tasks and tray workflows, keyboard activity statistics, and configurable 68/84/87/104-key layouts. The Windows port replaces the original Fn voice estimate with a keystroke rate based on active minutes.
 
-Read the [Windows preview notes and known issues](docs/windows-preview.md) and [build instructions](apps/toccata-windows/README.md) before use. This is not a complete stable release or a claim of 100% parity. The upstream release link does not distribute this Windows build. Windows preview updates currently require a manual download.
+**[Download the Windows 11 x64 preview](https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.3-win.1)** · [Settings](docs/images/windows-v013-settings.png) · [Tray activity](docs/images/windows-v013-tray.png) · [Task calendar](docs/images/windows-v013-calendar.png)
+
+Read the [Windows preview notes and known issues](docs/windows-preview.md) and [build instructions](apps/toccata-windows/README.md) before use. This is not a complete stable release or a claim of 100% parity. The upstream release link does not distribute this Windows build. This version supports user-triggered Windows updates; upgrading from the October 29 preview requires a manual download.
 
 The original author's macOS introduction, first-person story and acknowledgements are preserved below. The project retains the [Apache-2.0 license](LICENSE); see [Windows third-party notices](apps/toccata-windows/THIRD-PARTY-NOTICES.md).
 

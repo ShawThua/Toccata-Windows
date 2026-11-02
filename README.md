@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/WenNinghan/Toccata-Windows/releases/tag/windows-preview-20261029">下载 Windows 预览版</a> ·
+  <a href="https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.3-win.1">下载 Windows 预览版</a> ·
   <a href="https://github.com/KMnO4-zx/Toccata/releases">上游 macOS 下载</a> ·
   <a href="develop.md">开发指南</a> ·
   <a href="LICENSE">Apache-2.0</a>
@@ -22,9 +22,11 @@
 
 ## Windows 移植预览
 
-本 Fork 提供基于 [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata) 0.1.0 的**非官方 Windows 移植预览版**，代码位于 [`apps/toccata-windows`](apps/toccata-windows)。支持 Windows 原生窗口、任务与托盘、键盘活动统计、68/84/87/104 键布局及自定义；原版 Fn 语音估算在 Windows 版中替换为平均击键频率。
+2026-11-02 预览版 `0.1.3-win.1` 已迁移上游 v0.1.3 / build 21 的通用配置、喝水提醒、托盘活动、按键占比和 Windows 更新流程，并修复任务持续输入、计划日期及跨窗口编辑问题。优先级在任务列表和详情中以灰、蓝、橙、红分别表示无、低、中、高，并保留文字标识。见 [迁移说明](docs/windows-upstream-v013.md)。
 
-**[下载 Windows 11 x64 预览包](https://github.com/WenNinghan/Toccata-Windows/releases/tag/windows-preview-20261029)** · [浅色界面](docs/images/windows-preview-light.png) · [深色界面](docs/images/windows-preview-dark.png)
+本 Fork 提供 [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata) 的**非官方 Windows 移植预览版**，最初基于 0.1.0，现已补充 v0.1.3 的通用功能，代码位于 [`apps/toccata-windows`](apps/toccata-windows)。支持 Windows 原生窗口、任务与托盘、键盘活动统计、68/84/87/104 键布局及自定义；原版 Fn 语音估算在 Windows 版中替换为平均击键频率。
+
+**[下载 Windows 11 x64 预览包](https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.3-win.1)** · [通用配置](docs/images/windows-v013-settings.png) · [托盘活动](docs/images/windows-v013-tray.png) · [任务日历](docs/images/windows-v013-calendar.png)
 
 使用方法、采集与数据说明、已知问题见 [Windows 预览版说明](docs/windows-preview.md)，构建方法见 [Windows 开发说明](apps/toccata-windows/README.md)。当前不是完整稳定版，也不宣称与原版 100% 等价；上游 Releases 链接不代表提供本移植的 Windows 包。
 

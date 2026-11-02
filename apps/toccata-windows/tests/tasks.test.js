@@ -17,6 +17,17 @@ function fixture(t, start = 1700000000) {
   return { store, filename, setTime: time => { clock = time; } };
 }
 
+test('unchanged autosave preserves updated time and does not write another task row', t => {
+  const {store,setTime}=fixture(t);
+  const task=store.create({title:'稳定编辑',details:'正文',planned_at:1700100000});
+  const before=store.db.prepare('SELECT total_changes() AS n').get().n;
+  setTime(1700000100);
+  const same=store.update(task.id,{title:task.title,details:task.details,planned_at:task.planned_at,priority:task.priority});
+  assert.equal(same.updated_at,task.updated_at);
+  assert.equal(store.db.prepare('SELECT total_changes() AS n').get().n,before);
+  assert.equal(store.update(task.id,{details:'新的正文'}).updated_at,1700000100);
+});
+
 test('creates, persists and edits task without changing created time or priority', t => {
   const { store, filename, setTime } = fixture(t);
   const task = store.create({ title: '  任务  ', details: '# hello' });

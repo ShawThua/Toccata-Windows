@@ -16,3 +16,4 @@ apps/toccata-studio/Resources/build-info.json
 **/electron-profile/
 **/app-identity.key
 experiments/windows-raw-input/*.exe
+.qa-temp/

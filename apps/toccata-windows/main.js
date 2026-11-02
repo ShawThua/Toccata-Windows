@@ -1,21 +1,25 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, clipboard, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, dialog, clipboard, shell, Notification } = require('electron');
 const { pathToFileURL } = require('node:url');
 const { spawn } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 const readline = require('node:readline');
 const path = require('node:path');
 const fs = require('node:fs');
+const WINDOWS_VERSION=require('./package.json').version;
 const { TaskStore } = require('./data/tasks');
 const { AppIdentities } = require('./data/app-identities');
 const { AppIconRefresh, createIconLoader } = require('./data/app-icons');
 const { PressedKeys } = require('./data/pressed-keys');
 const keyboardLayouts = require('./data/keyboard-layouts');
-const { checkForUpdates } = require('./data/updates');
+const { UpdateManager } = require('./data/update-manager');
 const { computeStats } = require('./data/stats');
 const { KeyStore, mapWindowsKey } = require('./data/keyboard');
+const { DEFAULTS, SETTINGS_KEYS, normalizeSettings, validateSetting } = require('./data/settings');
+const { HydrationReminder, countTodayKeys } = require('./data/hydration');
 let mainWindow, trayWindow, editorWindow, tray, tasks, keys, identities, helper, flushing, captureState = 'stopped';
-let settings = { theme: 'system', language: 'zh', launchAtLogin: false, splitRatio: 0.48 };
+let settings = { ...DEFAULTS }, hydration, updateManager;
+const activeNotifications=new Set();
 let live = new Map(), session = '', quitting = false, shutdownInProgress = false, hidingMain = false, restartTimer = null, activityWindowMs = 5000, editorTaskId = null, editorOpening = 0;
 const identityCache=new Map(); let iconRefresh; const pressedKeys=new PressedKeys();
 let activeLayout=keyboardLayouts.getPreset('windows-100-104'),layoutWarning=null;
@@ -41,8 +45,32 @@ function loadActivityWindow(){try{const config=JSON.parse(fs.readFileSync(path.j
 function loadLayout() { try { activeLayout=keyboardLayouts.deserialize(fs.readFileSync(path.join(dataDir,'keyboard-layout.json'),'utf8'));layoutWarning=null; } catch(e) { if(e.code!=='ENOENT'){layoutWarning='自定义键盘布局无法读取，已暂时使用默认布局';console.error('Keyboard layout unavailable; using default');} } }
 function saveLayout(layout) { const safe=keyboardLayouts.validate(layout);const dest=path.join(dataDir,'keyboard-layout.json'),tmp=dest+'.tmp';fs.writeFileSync(tmp,keyboardLayouts.serialize(safe),'utf8');fs.renameSync(tmp,dest);activeLayout=safe;layoutWarning=null;return safe; }
 function settingsFile() { return path.join(dataDir,'settings.json'); }
-function loadSettings() { try { const saved = JSON.parse(fs.readFileSync(settingsFile(),'utf8')); settings = { ...settings, ...saved }; } catch (e) { if (e.code !== 'ENOENT') console.error('Settings unavailable:',e.message); } }
+function loadSettings() { try { settings = normalizeSettings(JSON.parse(fs.readFileSync(settingsFile(),'utf8'))); } catch (e) { if (e.code !== 'ENOENT') console.error('Settings unavailable:',e.message); } }
 function saveSettings() { const tmp = settingsFile()+'.tmp'; fs.writeFileSync(tmp,JSON.stringify(settings,null,2),'utf8'); fs.renameSync(tmp,settingsFile()); }
+function applyTaskbarSetting(){if(mainWindow&&!mainWindow.isDestroyed())mainWindow.setSkipTaskbar(!!settings.hideTaskbar&&!!tray);}
+function saveHydrationProgress(progress){const destination=path.join(dataDir,'hydration-progress.json'),tmp=destination+'.tmp';fs.writeFileSync(tmp,JSON.stringify(progress),'utf8');fs.renameSync(tmp,destination);}
+function notifyHydration(message){
+ if(quitting||!Notification.isSupported())return Promise.reject(new Error('Windows notification service unavailable'));
+ const english=settings.language==='en',title=english?'Time for a water break':'💧 记得喝水哦～';
+ const body=message.kind==='test'?(english?'This is a test notification from Toccata.':'这是 Toccata 的测试通知。'):(english?`You have pressed ${message.count.toLocaleString('en-US')} keys today. Take a drink and stretch a little.`:`今天已经敲了 ${message.count.toLocaleString('zh-CN')} 次键盘，起来喝杯水，顺便活动一下吧。`);
+ return new Promise((resolve,reject)=>{
+  const notification=new Notification({title,body,icon:path.join(__dirname,'renderer','mark.png'),silent:false});activeNotifications.add(notification);let settled=false;
+  const finish=(error)=>{if(settled)return;settled=true;clearTimeout(timer);if(error){activeNotifications.delete(notification);reject(error);}else resolve();};
+  const timer=setTimeout(()=>finish(new Error('Windows notification handoff timed out')),5000);
+  notification.once('show',()=>finish());notification.once('failed',()=>finish(new Error('Windows refused the notification')));notification.once('close',()=>activeNotifications.delete(notification));
+  try{notification.show();}catch(error){finish(error);}
+ });
+}
+function startHydration(){
+ hydration=new HydrationReminder({enabled:settings.hydrationEnabled,interval:settings.hydrationInterval,readCount:at=>countTodayKeys(keys,at),readProgress:()=>JSON.parse(fs.readFileSync(path.join(dataDir,'hydration-progress.json'),'utf8')),saveProgress:saveHydrationProgress,notify:notifyHydration,supported:()=>Notification.isSupported(),onChange:status=>publish('hydration',status)});
+ hydration.evaluate();
+}
+async function openMainPage(page){
+ if(page!==undefined&&!['tasks','calendar','activity','ranking','settings'].includes(page))throw new Error('Invalid workspace page');
+ if(page!==undefined&&!(await requestWindowFlush(mainWindow)))throw new Error('当前任务尚未保存，请重试');
+ if(mainWindow.isMinimized())mainWindow.restore();mainWindow.show();mainWindow.focus();
+ if(page!==undefined)mainWindow.webContents.send('navigate',{page});if(trayWindow)trayWindow.hide();return true;
+}
 function scheduleStorageRecovery() { if(flushing)return; captureState='storage-error';publish('capture',{state:captureState});flushing=setInterval(()=>{if(flushKeys()){clearInterval(flushing);flushing=null;if(!quitting && !helper)startCapture();}},2000);flushing.unref(); }
 function resolveIdentity(message) {
   if(!identities || typeof message.exe_path!=='string' || typeof message.app!=='string') return null;
@@ -57,7 +85,7 @@ function enrichApps(snapshot) {
  return snapshot;
 }
 function helperPath() { return app.isPackaged ? path.join(process.resourcesPath,'app.asar.unpacked','native','raw_input_helper.exe') : path.join(__dirname,'native','raw_input_helper.exe'); }
-function flushKeys() { if (!keys) return true; try { const written=keys.flush(); if (captureState==='storage-error' && helper) { captureState='active'; publish('capture',{state:captureState}); } if(written) change('keyboard'); return true; } catch (e) { console.error('Keyboard data flush failed:',e.message); captureState='storage-error'; publish('capture',{state:captureState,error:e.message}); return false; } }
+function flushKeys() { if (!keys) return true; try { const written=keys.flush(); if (captureState==='storage-error' && helper) { captureState='active'; publish('capture',{state:captureState}); } if(written) change('keyboard');if(!quitting)hydration?.evaluate(); return true; } catch (e) { console.error('Keyboard data flush failed:',e.message); captureState='storage-error'; publish('capture',{state:captureState,error:e.message}); return false; } }
 function resetLive(data) { if (data.device) { for (const [k,v] of live) if (v.device===data.device) live.delete(k); } else live.clear(); }
 function startCapture() {
   if (process.env.TOCCATA_DISABLE_CAPTURE === '1') { captureState='disabled'; return; }
@@ -94,16 +122,18 @@ function createMain() {
   if (!app.isPackaged && process.env.TOCCATA_DISABLE_CAPTURE==='1' && process.env.TOCCATA_QA_SCREENSHOT) mainWindow.webContents.once('did-finish-load',()=>setTimeout(async()=>{try{const img=await mainWindow.webContents.capturePage(); fs.writeFileSync(process.env.TOCCATA_QA_SCREENSHOT,img.toPNG()); console.log('QA_SNAPSHOT',await mainWindow.webContents.executeJavaScript('document.body.innerText'));}catch(e){console.error('QA_CAPTURE_ERROR',e);} },1500));
   mainWindow.on('close',e=>{if (!quitting && tray) {e.preventDefault();if(hidingMain)return;hidingMain=true;requestWindowFlush(mainWindow).then(ok=>{if(ok&&!quitting&&!mainWindow.isDestroyed())mainWindow.hide();else if(!ok)dialog.showErrorBox('任务保存未完成','有编辑内容尚未保存，请检查后重试。');}).catch(()=>dialog.showErrorBox('任务保存未完成','有编辑内容尚未保存，请检查后重试。')).finally(()=>{hidingMain=false;});}});
 }
+function refreshTrayMenu(){if(!tray)return;const en=settings.language==='en';tray.setContextMenu(Menu.buildFromTemplate([{label:en?'Open workspace':'打开工作台',click:()=>{openMainPage().catch(()=>{});}},{label:en?'General settings':'通用配置',click:()=>{openMainPage('settings').catch(()=>{});}},{label:en?'Water reminders…':'喝水提醒…',click:()=>{openMainPage('settings').catch(()=>{});}},{type:'separator'},{label:en?'Quit Toccata':'退出 Toccata',click:()=>{quitting=true;app.quit();}}]));}
 function createTray() {
   const iconPath=path.join(__dirname,'renderer','mark.png');
   let icon=nativeImage.createFromPath(iconPath);
   if (icon.isEmpty()) return;
   tray=new Tray(icon.resize({width:18,height:18})); tray.setToolTip('Toccata');
-  trayWindow=new BrowserWindow({width:312,height:554,show:false,frame:false,resizable:false,skipTaskbar:true,webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  trayWindow=new BrowserWindow({width:400,height:650,show:false,frame:false,resizable:false,skipTaskbar:true,webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   guardNavigation(trayWindow); trayWindow.loadFile(path.join(__dirname,'renderer','index.html'),{query:{view:'tray'}});
-  trayWindow.on('blur',()=>setTimeout(()=>{if(!editorOpening && !trayWindow.isFocused() && !(editorWindow && !editorWindow.isDestroyed() && editorWindow.isFocused())){trayWindow.hide();if(editorWindow && !editorWindow.isDestroyed())editorWindow.hide();}},150));
-  tray.on('click',()=>{ if (trayWindow.isVisible()) {trayWindow.hide();if(editorWindow&&!editorWindow.isDestroyed())editorWindow.hide();return;} const area=require('electron').screen.getDisplayNearestPoint(require('electron').screen.getCursorScreenPoint()).workArea; const b=tray.getBounds(); trayWindow.setPosition(Math.max(area.x,Math.min(b.x,area.x+area.width-312)),Math.max(area.y,Math.min(b.y-554,area.y+area.height-554))); trayWindow.show(); });
-  tray.setContextMenu(Menu.buildFromTemplate([{label:'打开工作台',click:()=>{mainWindow.show();mainWindow.focus();}},{label:'退出 Toccata',click:()=>{quitting=true;app.quit();}}]));
+  trayWindow.on('blur',()=>setTimeout(()=>{if(quitting||!trayWindow||trayWindow.isDestroyed())return;if(!editorOpening && !trayWindow.isFocused() && !(editorWindow && !editorWindow.isDestroyed() && editorWindow.isFocused())){trayWindow.hide();if(editorWindow && !editorWindow.isDestroyed())editorWindow.hide();}},150));
+  tray.on('click',()=>{ if (trayWindow.isVisible()) {trayWindow.hide();if(editorWindow&&!editorWindow.isDestroyed())editorWindow.hide();return;} const area=require('electron').screen.getDisplayNearestPoint(require('electron').screen.getCursorScreenPoint()).workArea; const b=tray.getBounds();const width=Math.min(400,area.width-16),height=Math.min(650,area.height-16);trayWindow.setSize(width,height);trayWindow.webContents.send('tray-open',{page:settings.trayDefaultPage}); trayWindow.setPosition(Math.max(area.x,Math.min(b.x,area.x+area.width-width)),Math.max(area.y,Math.min(b.y-height,area.y+area.height-height))); trayWindow.show(); });
+  refreshTrayMenu();
+  applyTaskbarSetting();
 }
 function isTrusted(e) { const allowed=pathToFileURL(path.join(__dirname,'renderer','index.html')).href; return BrowserWindow.getAllWindows().some(w=>w.webContents===e.sender && e.senderFrame===w.webContents.mainFrame && e.senderFrame.url.split('?')[0]===allowed); }
 function bind(channel,handler) { ipcMain.handle(channel,(event,payload)=>{if(!isTrusted(event)) throw new Error('Untrusted sender');return handler(payload||{});}); }
@@ -111,7 +141,7 @@ function bindIpc() {
   ipcMain.handle('app:flush-result',(e,p)=>{if(!isTrusted(e))throw new Error('Untrusted sender');const pending=flushRequests.get(p?.token);if(!pending||pending.sender!==e.sender.id)return false;pending.resolve(p.ok===true);return true;});
   bind('tasks:list',()=>({tasks:tasks.list()}));
   bind('tasks:create',p=>{const value=tasks.create(p);change();return value;});
-  bind('tasks:update',p=>{const {id,...rest}=p;const result=tasks.update(id,rest);change();return result;});
+  bind('tasks:update',p=>{const {id,...rest}=p;const before=tasks.get(id),result=tasks.update(id,rest);if(['title','details','planned_at','priority'].some(key=>before?.[key]!==result[key]))change();return result;});
   bind('tasks:toggle',p=>{const t=tasks.get(p.id);if(!t) throw new Error('任务不存在');const v=tasks.setCompleted(p.id,t.completed_at===null);change();return v;});
   bind('tasks:delete',async p=>{if(!(await requestAllFlush()))throw new Error('有编辑内容尚未保存，无法删除');const v=tasks.delete(p.id);if(editorWindow&&!editorWindow.isDestroyed()&&editorTaskId&&!tasks.get(editorTaskId)){editorWindow.destroy();editorWindow=null;editorTaskId=null;}change();return v;});
   bind('tasks:move',p=>{const v=tasks.moveSubtask(p.sourceId,p.targetId,p.placement);change();return v;});
@@ -126,8 +156,11 @@ function bindIpc() {
   bind('layout:preset',p=>keyboardLayouts.getPreset(p.id));
   bind('layout:set',p=>{const layout=saveLayout(p.layout);change('layout');return {layout,rendererLayout:keyboardLayouts.toRendererLayout(layout)};});
   bind('capture:status',()=>({state:captureState}));
-  bind('settings:get',()=>{try{settings.launchAtLogin=!!app.getLoginItemSettings({args:['--login']}).openAtLogin;}catch(e){console.error('Login status unavailable:',e.message);}return {...settings,activityWindowSecs:activityWindowMs/1000};});
-  bind('settings:set',p=>{if(!['theme','language','splitRatio'].includes(p.key)) throw new Error('Invalid setting');if(p.key==='splitRatio'&&(!Number.isFinite(p.value)||p.value<0||p.value>1))throw new Error('Invalid split ratio');settings[p.key]=p.value;saveSettings();change('settings');return settings;});
+  bind('settings:get',()=>{try{settings.launchAtLogin=!!app.getLoginItemSettings({args:['--login']}).openAtLogin;}catch(e){console.error('Login status unavailable:',e.message);}return {...settings,activityWindowSecs:activityWindowMs/1000,version:WINDOWS_VERSION,upstreamVersion:'0.1.3',upstreamBuild:'21'};});
+  bind('settings:set',async p=>{if(!SETTINGS_KEYS.includes(p.key))throw new Error('Invalid setting');const value=validateSetting(p.key,p.value);if(p.key==='hideTaskbar'&&value&&!tray)throw new Error('系统托盘不可用，无法隐藏任务栏图标');if(settings[p.key]===value)return {...settings};const previous=settings;settings={...settings,[p.key]:value};try{saveSettings();}catch(error){settings=previous;throw error;}if(p.key==='language')refreshTrayMenu();if(p.key==='hideTaskbar')applyTaskbarSetting();if(p.key==='hydrationEnabled'||p.key==='hydrationInterval')await hydration.configure(settings.hydrationEnabled,settings.hydrationInterval);change('settings');return {...settings};});
+  bind('app:hydration-status',async()=>{await hydration.evaluate();return hydration.status();});
+  bind('app:test-notification',()=>hydration.test());
+  bind('app:notification-settings',async()=>{await shell.openExternal('ms-settings:notifications');return true;});
   bind('app:toggle-login',p=>{if(!app.isPackaged)throw new Error('请在打包版中设置登录时启动');if(typeof p.enabled!=='boolean')throw new Error('Invalid login setting');app.setLoginItemSettings({openAtLogin:p.enabled,args:['--login']});const actual=!!app.getLoginItemSettings({args:['--login']}).openAtLogin;settings.launchAtLogin=actual;saveSettings();change('settings');if(actual!==p.enabled)throw new Error('Windows 未能应用登录启动设置');return {...settings};});
   bind('app:open-editor',async p=>{
     if(!tasks.get(p.id)||!trayWindow) throw new Error('任务不存在');
@@ -136,7 +169,7 @@ function bindIpc() {
     if(!editorWindow || editorWindow.isDestroyed()){
       editorWindow=new BrowserWindow({width:400,height:300,show:false,frame:false,resizable:false,skipTaskbar:true,webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
       guardNavigation(editorWindow);
-      editorWindow.on('blur',()=>setTimeout(()=>{if(!editorOpening && editorWindow && !editorWindow.isDestroyed() && !editorWindow.isFocused() && !trayWindow.isFocused()){editorWindow.hide();trayWindow.hide();}},150));
+      editorWindow.on('blur',()=>setTimeout(()=>{if(quitting||!trayWindow||trayWindow.isDestroyed())return;if(!editorOpening && editorWindow && !editorWindow.isDestroyed() && !editorWindow.isFocused() && !trayWindow.isFocused()){editorWindow.hide();trayWindow.hide();}},150));
     }
     const b=trayWindow.getBounds(), area=require('electron').screen.getDisplayMatching(b).workArea;
     const x=b.x-400>=area.x?b.x-400:Math.min(area.x+area.width-400,b.x+b.width);
@@ -150,9 +183,24 @@ function bindIpc() {
   bind('app:minimize',()=>{mainWindow.minimize();return true;});
   bind('app:maximize',()=>{if(mainWindow.isMaximized())mainWindow.unmaximize();else mainWindow.maximize();return true;});
   bind('app:close',()=>{mainWindow.close();return true;});
-  bind('app:open-main',()=>{mainWindow.show();mainWindow.focus();if(trayWindow) trayWindow.hide();return true;});
+  bind('app:open-main',p=>openMainPage(p.page));
   bind('app:quit',()=>{quitting=true;app.quit();return true;});
-  bind('app:check-update',()=>checkForUpdates({currentVersion:app.getVersion()}));
+  bind('app:check-update',()=>updateManager.check());
+  bind('app:update-status',()=>({...updateManager.status(),packaged:app.isPackaged}));
+  bind('app:update-download',()=>{updateManager.download().catch(error=>updateManager.publish({phase:'error',error:error.message}));return updateManager.status();});
+  bind('app:update-cancel',()=>updateManager.cancel());
+  bind('app:update-install',async()=>{
+    if(!app.isPackaged)throw new Error('请从已打包的 Windows 程序安装更新');
+    if(!updateManager.status().canInstall)throw new Error('尚无校验完成的 Windows 更新包');
+    if(!await requestAllFlush())throw new Error('任务尚未保存，无法安装更新');
+    quitting=true;shutdownInProgress=true;
+    try{
+      if(!await stopCapture())throw new Error('键盘记录尚未保存，无法安装更新');
+      const installer=updateManager.stageInstall({target:path.dirname(app.getPath('exe')),pid:process.pid});
+      await installer.requestWritten;
+      hydration?.stop();iconRefresh?.close();keys?.close();tasks?.close();identities?.close();app.exit(0);return true;
+    }catch(error){quitting=false;shutdownInProgress=false;updateManager.publish({phase:'error',error:error.message});if(!helper)startCapture();throw error;}
+  });
   bind('app:clipboard-text',p=>{if(typeof p.text!=='string'||p.text.length>1000000)throw new Error('Invalid text');clipboard.writeText(p.text);return true;});
   bind('app:share',async p=>{if(typeof p.dataUrl!=='string'||!p.dataUrl.startsWith('data:image/png;base64,')) throw new Error('Invalid image');const img=nativeImage.createFromDataURL(p.dataUrl);if(img.isEmpty()) throw new Error('Invalid image');if(p.copy){clipboard.writeImage(img);return true;}const target=await dialog.showSaveDialog(mainWindow,{title:'保存分享图片',defaultPath:'Toccata.png',filters:[{name:'PNG',extensions:['png']}]});if(target.canceled||!target.filePath)return false;fs.writeFileSync(target.filePath,img.toPNG());return true;});
 }
@@ -160,9 +208,9 @@ const hasLock=app.requestSingleInstanceLock();
 if (!hasLock) app.quit();
 app.on('second-instance',(_event,argv)=>{if(mainWindow&&!argv.includes('--login')){mainWindow.show();mainWindow.focus();}});
 if (hasLock) app.whenReady().then(()=>{
-  Menu.setApplicationMenu(null);fs.mkdirSync(dataDir,{recursive:true});loadSettings();loadActivityWindow();loadLayout();identities=new AppIdentities(dataDir);iconRefresh=new AppIconRefresh({load:createIconLoader(),canWrite:()=>!quitting,onSaved:(record,exePath)=>{identityCache.set(exePath,record);change('keyboard');}});tasks=new TaskStore(path.join(dataDir,'tasks.sqlite'));keys=new KeyStore(!app.isPackaged && process.env.TOCCATA_QA_MEMORY==='1'?':memory:':path.join(dataDir,'toccata-windows.sqlite'));bindIpc();createMain();createTray();startCapture();
+  Menu.setApplicationMenu(null);if(process.platform==='win32')app.setAppUserModelId('org.toccata.windows');fs.mkdirSync(dataDir,{recursive:true});loadSettings();loadActivityWindow();loadLayout();identities=new AppIdentities(dataDir);iconRefresh=new AppIconRefresh({load:createIconLoader(),canWrite:()=>!quitting,onSaved:(record,exePath)=>{identityCache.set(exePath,record);change('keyboard');}});tasks=new TaskStore(path.join(dataDir,'tasks.sqlite'));keys=new KeyStore(!app.isPackaged && process.env.TOCCATA_QA_MEMORY==='1'?':memory:':path.join(dataDir,'toccata-windows.sqlite'));startHydration();updateManager=new UpdateManager({dataDir,currentVersion:WINDOWS_VERSION,onProgress:value=>publish('update-progress',value)});bindIpc();createMain();createTray();startCapture();
 }).catch(e=>{console.error('Toccata startup failed:',e.message);dialog.showErrorBox('Toccata 启动失败',String(e.message));app.exit(1);});
-app.on('before-quit',event=>{ flushDebug('before-quit',shutdownInProgress);if(!hasLock) return; event.preventDefault(); if(shutdownInProgress)return; shutdownInProgress=true; quitting=true; (async()=>{flushDebug('all begin');if(!(await requestAllFlush())){quitting=false;shutdownInProgress=false;dialog.showErrorBox('任务保存未完成','有编辑内容尚未保存，请检查后重试退出。');if(mainWindow)mainWindow.show();return;}flushDebug('all saved');const saved=await stopCapture();if(!saved){quitting=false;shutdownInProgress=false;scheduleStorageRecovery();dialog.showErrorBox('数据保存失败','键盘数据尚未保存，请检查磁盘后重试退出。');if(mainWindow)mainWindow.show();return;}try{if(keys){keys.close();keys=null;}if(tasks){tasks.close();tasks=null;}iconRefresh?.close();if(identities){identities.close();identities=null;}identityCache.clear();flushDebug('exit');app.exit(0);}catch(e){quitting=false;shutdownInProgress=false;scheduleStorageRecovery();dialog.showErrorBox('数据保存失败',String(e.message));}})(); });
+app.on('before-quit',event=>{ flushDebug('before-quit',shutdownInProgress);if(!hasLock) return; event.preventDefault(); if(shutdownInProgress)return; shutdownInProgress=true; quitting=true; (async()=>{flushDebug('all begin');if(!(await requestAllFlush())){quitting=false;shutdownInProgress=false;dialog.showErrorBox('任务保存未完成','有编辑内容尚未保存，请检查后重试退出。');if(mainWindow)mainWindow.show();return;}flushDebug('all saved');const saved=await stopCapture();if(!saved){quitting=false;shutdownInProgress=false;scheduleStorageRecovery();dialog.showErrorBox('数据保存失败','键盘数据尚未保存，请检查磁盘后重试退出。');if(mainWindow)mainWindow.show();return;}try{hydration?.stop();for(const notification of activeNotifications)notification.close();activeNotifications.clear();if(keys){keys.close();keys=null;}if(tasks){tasks.close();tasks=null;}iconRefresh?.close();if(identities){identities.close();identities=null;}identityCache.clear();flushDebug('exit');app.exit(0);}catch(e){quitting=false;shutdownInProgress=false;scheduleStorageRecovery();dialog.showErrorBox('数据保存失败',String(e.message));}})(); });
 app.on('window-all-closed',()=>{if(!tray)app.quit();});
 
 

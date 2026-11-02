@@ -7,9 +7,9 @@ const { LATEST_RELEASE, parseVersion, compareVersions, parseRelease, checkForUpd
 function release(tag, names) {
   return {
     tag_name:tag, draft:false, prerelease:false,
-    html_url:`https://github.com/KMnO4-zx/Toccata/releases/tag/${tag}`,
+    html_url:`https://github.com/WenNinghan/Toccata-Windows/releases/tag/${tag}`,
     assets:names.map(name => ({ name, state:'uploaded',
-      browser_download_url:`https://github.com/KMnO4-zx/Toccata/releases/download/${tag}/${encodeURIComponent(name)}` })),
+      browser_download_url:`https://github.com/WenNinghan/Toccata-Windows/releases/download/${tag}/${encodeURIComponent(name)}` })),
   };
 }
 const response = body => async (url, opts) => {
@@ -65,11 +65,11 @@ test('rejects untrusted URL, wrong tag, draft or unpublished asset', () => {
   const r = release('v1.0.0', ['valid.exe', 'bad.exe', 'not-uploaded.msi', 'wrong-tag.exe', 'evil.exe']);
   r.assets[1].browser_download_url = 'https://example.org/bad.exe';
   r.assets[2].state = 'new';
-  r.assets[3].browser_download_url = 'https://github.com/KMnO4-zx/Toccata/releases/download/v0.9.0/wrong-tag.exe';
+  r.assets[3].browser_download_url = 'https://github.com/WenNinghan/Toccata-Windows/releases/download/v0.9.0/wrong-tag.exe';
   r.assets[4].browser_download_url = 'https://github.com/attacker/Toccata/releases/download/v1.0.0/evil.exe';
   assert.deepEqual(parseRelease(r).assets.map(a => a.name), ['valid.exe']);
   assert.equal(parseRelease({ ...r, draft:true }), null);
-  assert.equal(parseRelease({ ...r, prerelease:true }), null);
+  assert.ok(parseRelease({ ...r, prerelease:true }), 'Windows preview channel supports prereleases');
 });
 
 test('network, HTTP, invalid version and invalid response errors become explicit statuses', async () => {

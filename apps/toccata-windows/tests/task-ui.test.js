@@ -243,12 +243,12 @@ test('Electron: task calendar, review order and tray selection and context menu'
   assert.match(review.groups[1],/待推进主任务/);
 
   tray = await CDP.connect((await app.target(url=>url.includes('?view=tray'))).webSocketDebuggerUrl);
-  await present(tray,`Boolean(document.querySelector('[data-action="tray-calendar"]'))`,'tray ready');
-  await click(tray,'[data-action="tray-calendar"]');
+  await present(tray,`Boolean(document.querySelector('[data-action="tray-page"][data-value="calendar"]'))`,'tray ready');
+  await click(tray,'[data-action="tray-page"][data-value="calendar"]');
   await present(tray,`document.querySelectorAll('.task-month-grid .calendar-day-cell').length`,'tray calendar');
   assert.equal(await tray.evaluate(`document.querySelectorAll('.calendar-day-cell.today .calendar-dots .on').length`),3);
   assert.equal(await tray.evaluate(`document.querySelectorAll('.task-month-grid .calendar-day-cell').length`),grid.dates.length);
-  await click(tray,'[data-action="tray-show-tasks"]');
+  await click(tray,'[data-action="tray-page"][data-value="tasks"]');
   const row=id=>`.tray-scroll .task-row[data-id="${id}"]`;
   await present(tray,`Boolean(document.querySelector(${JSON.stringify(row(ids.parent.id))}))`,'tray parent');
   await click(tray,row(ids.parent.id));

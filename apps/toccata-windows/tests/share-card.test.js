@@ -20,6 +20,8 @@ test('renders the complete local share card and returns an exportable canvas',()
   const h=harness();const canvas=h.render({stats,timelineStats:stats,rangeLabel:'2026-10-28',layout,language:'zh'});
   for(const label of ['我的键盘足迹','2026-10-28','键盘活跃时间','按键次数','平均击键频率','1 次/活跃分钟','键盘热力图','活跃时间线','常用应用','notepad.exe']) assert.ok(h.labels.includes(label),`missing ${label}`);
   assert.ok(h.labels.some(label=>label.includes('3 次按键')&&label.endsWith('1 次/活跃分钟')),'daily summary must use the same rate metric');
+  assert.ok(h.labels.includes('占 66.7%'),'ranked share uses the selected range total');
+  assert.ok(h.labels.includes('占 33.3%'),'ranked share rounds to at most one decimal');
   assert.ok(!h.labels.some(label=>label.includes('语音输出估算')||label.includes(' · Fn ')),'old Fn metric remains in export');
   assert.ok(h.fills>100,'missing geometry or timeline');
   assert.equal(canvas.width,1440);assert.ok(canvas.height>1300);assert.match(canvas.toDataURL('image/png'),/^data:image\/png/);
