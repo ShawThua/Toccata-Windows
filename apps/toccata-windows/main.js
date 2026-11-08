@@ -115,10 +115,13 @@ function startCapture() {
 }
 async function stopCapture() { if(restartTimer){clearTimeout(restartTimer);restartTimer=null;} if (flushing) { clearInterval(flushing); flushing=null; } const child=helper; if(child) await new Promise(resolve=>{let finished=false;const done=()=>{if(!finished){finished=true;clearTimeout(timer);resolve();}};child.once('close',done);const timer=setTimeout(()=>{child.kill();},3000);if(child.stdin.writable)child.stdin.end('quit\n');else child.kill();}); live.clear(); return flushKeys(); }
 function guardNavigation(window) { const allowed=pathToFileURL(path.join(__dirname,'renderer','index.html')).href; window.webContents.on('will-navigate',(event,url)=>{ if(url.split('?')[0]!==allowed) { event.preventDefault(); if(/^https?:\/\//i.test(url)) shell.openExternal(url); } }); window.webContents.setWindowOpenHandler(({url})=>{if(/^https?:\/\//i.test(url)) shell.openExternal(url);return {action:'deny'};}); }
+let trayRetry=0;
+function launchMode(){return ['window','panel','silent'].includes(settings.launchMode)?settings.launchMode:'panel';}
+function openTrayPanel(){if(!tray||!trayWindow||trayWindow.isDestroyed())return;const w=trayWindow;let tries=0;const place=()=>{if(!tray||w.isDestroyed())return false;try{const b=tray.getBounds();const area=require('electron').screen.getDisplayMatching(b).workArea;const width=Math.min(400,area.width-16),height=Math.min(650,area.height-16);w.setSize(width,height);w.webContents.send('tray-open',{page:settings.trayDefaultPage});w.setPosition(Math.max(area.x,Math.min(b.x,area.x+area.width-width)),Math.max(area.y,Math.min(b.y-height,area.y+area.height-height)));w.show();}catch(e){console.error('TRAY_PANEL_FAIL',e.message);}return w.isVisible();};const attempt=()=>{if(!place()&&tries++<10)setTimeout(attempt,300);};if(w.webContents.isLoading()){w.webContents.once('did-finish-load',()=>setTimeout(attempt,80));setTimeout(attempt,1500);}else attempt();}
 function createMain() {
   mainWindow=new BrowserWindow({width:1200,height:820,minWidth:900,minHeight:600,title:'Toccata',frame:true,show:false,backgroundColor:'#ffffff',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   guardNavigation(mainWindow); mainWindow.loadFile(path.join(__dirname,'renderer','index.html'));
-  mainWindow.once('ready-to-show',()=>{if(!process.argv.includes('--login') || !tray)mainWindow.show();});
+  mainWindow.once('ready-to-show',()=>{if(!process.argv.includes('--login')){mainWindow.show();return;}const mode=launchMode();const decide=()=>{if(mode==='window')mainWindow.show();else if(mode==='panel')openTrayPanel();};if(tray){decide();return;}let waited=0;const timer=setInterval(()=>{waited+=250;if(tray){clearInterval(timer);decide();return;}if(waited>=5000){clearInterval(timer);mainWindow.show();}},250);});
   if (!app.isPackaged && process.env.TOCCATA_DISABLE_CAPTURE==='1' && process.env.TOCCATA_QA_SCREENSHOT) mainWindow.webContents.once('did-finish-load',()=>setTimeout(async()=>{try{const img=await mainWindow.webContents.capturePage(); fs.writeFileSync(process.env.TOCCATA_QA_SCREENSHOT,img.toPNG()); console.log('QA_SNAPSHOT',await mainWindow.webContents.executeJavaScript('document.body.innerText'));}catch(e){console.error('QA_CAPTURE_ERROR',e);} },1500));
   mainWindow.on('close',e=>{if (!quitting && tray) {e.preventDefault();if(hidingMain)return;hidingMain=true;requestWindowFlush(mainWindow).then(ok=>{if(ok&&!quitting&&!mainWindow.isDestroyed())mainWindow.hide();else if(!ok)dialog.showErrorBox('任务保存未完成','有编辑内容尚未保存，请检查后重试。');}).catch(()=>dialog.showErrorBox('任务保存未完成','有编辑内容尚未保存，请检查后重试。')).finally(()=>{hidingMain=false;});}});
 }
@@ -126,12 +129,12 @@ function refreshTrayMenu(){if(!tray)return;const en=settings.language==='en';tra
 function createTray() {
   const iconPath=path.join(__dirname,'renderer','mark.png');
   let icon=nativeImage.createFromPath(iconPath);
-  if (icon.isEmpty()) return;
+  if (icon.isEmpty()) { if (trayRetry++ < 10) setTimeout(createTray, 700); return; }
   tray=new Tray(icon.resize({width:18,height:18})); tray.setToolTip('Toccata');
   trayWindow=new BrowserWindow({width:400,height:650,show:false,frame:false,resizable:false,skipTaskbar:true,webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
   guardNavigation(trayWindow); trayWindow.loadFile(path.join(__dirname,'renderer','index.html'),{query:{view:'tray'}});
   trayWindow.on('blur',()=>setTimeout(()=>{if(quitting||!trayWindow||trayWindow.isDestroyed())return;if(!editorOpening && !trayWindow.isFocused() && !(editorWindow && !editorWindow.isDestroyed() && editorWindow.isFocused())){trayWindow.hide();if(editorWindow && !editorWindow.isDestroyed())editorWindow.hide();}},150));
-  tray.on('click',()=>{ if (trayWindow.isVisible()) {trayWindow.hide();if(editorWindow&&!editorWindow.isDestroyed())editorWindow.hide();return;} const area=require('electron').screen.getDisplayNearestPoint(require('electron').screen.getCursorScreenPoint()).workArea; const b=tray.getBounds();const width=Math.min(400,area.width-16),height=Math.min(650,area.height-16);trayWindow.setSize(width,height);trayWindow.webContents.send('tray-open',{page:settings.trayDefaultPage}); trayWindow.setPosition(Math.max(area.x,Math.min(b.x,area.x+area.width-width)),Math.max(area.y,Math.min(b.y-height,area.y+area.height-height))); trayWindow.show(); });
+  tray.on('click',()=>{ if (trayWindow.isVisible()) {trayWindow.hide();if(editorWindow&&!editorWindow.isDestroyed())editorWindow.hide();return;} openTrayPanel(); });
   refreshTrayMenu();
   applyTaskbarSetting();
 }

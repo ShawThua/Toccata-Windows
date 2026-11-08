@@ -41,6 +41,7 @@
         row(t('默认打开页面','Default page'),t('每次点击托盘图标时使用。','Used each time you open the tray panel.'),select('feature-tray-default',t('默认打开页面','Default page'),[['tasks',t('任务管理','Tasks')],['calendar',t('任务日历','Task calendar')],['activity',t('活动速览','Activity overview')]],settings.trayDefaultPage||'tasks')))+
       card('power',t('启动与后台运行','Startup & background'),t('选择启动方式，保留顺手的入口。','Choose how Toccata starts and stays within reach.'),
         row(t('登录时启动','Launch at login'),t('登录 Windows 后自动启动。','Start Toccata when you sign in to Windows.'),toggle('feature-login',t('登录时启动','Launch at login'),!!settings.launchAtLogin))+
+        row(t('登录时打开','At sign-in, open'),t('仅影响开机自启；手动双击始终打开主窗口。','Only affects startup at sign-in. A manual launch always opens the main window.'),select('feature-launch-mode',t('登录时打开','At sign-in, open'),[['panel',t('小面板','Tray panel')],['silent',t('静默（仅托盘）','Silent (tray only)')],['window',t('主窗口','Main window')]],['panel','silent','window'].includes(settings.launchMode)?settings.launchMode:'panel'))+
         row(t('隐藏任务栏图标','Hide taskbar icon'),t('隐藏后仍可从系统托盘打开工作台。','You can still open the workspace from the system tray.'),toggle('feature-hide-taskbar',t('隐藏任务栏图标','Hide taskbar icon'),!!settings.hideTaskbar))+
         `<p class="wf-setting-note">${t('关闭窗口后继续在后台运行；从托盘选择“退出 Toccata”可结束运行。','Closing the workspace keeps Toccata running. Choose Exit Toccata from the tray to stop it.')}</p>`)+
       card('water',t('喝水提醒','Water reminders'),t('投入一阵，也给自己一个小休息。','A small break after a stretch of focused work.'),
