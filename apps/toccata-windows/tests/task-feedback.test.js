@@ -60,9 +60,36 @@ test('same task, other parent, other completion group and root tasks cannot be d
   assert.equal(target.classList.contains('drop-before')||target.classList.contains('drop-after'),false);
   const drop=await f.root.fire('drop',target);assert.equal(drop.prevented,false);
  }
- assert.deepEqual(f.calls,[]);const start=await f.root.fire('dragstart',root);assert.equal(start.prevented,true);assert.equal(root.classList.contains('dragging'),false);
+ assert.deepEqual(f.calls,[]);const start=await f.root.fire('dragstart',root);assert.equal(start.prevented,false);assert.equal(root.classList.contains('dragging'),true);await f.root.fire('dragend',root);
  // A completion at Unix epoch is completed, so it can be moved beside another completed task.
  await f.root.fire('dragstart',epoch);await f.root.fire('drop',done,255);assert.equal(f.calls.length,1);assert.equal(f.calls[0].sourceId,'epoch');f.feedback.destroy();
+});
+
+test('root dragging accepts descendant drop zones, treats whole groups together, and blocks crossing pin groups',async()=>{
+ const tasks=[{id:'a',parent_id:null,completed_at:null,pinned:0},{id:'a1',parent_id:'a',completed_at:null},{id:'b',parent_id:null,completed_at:null,pinned:0},{id:'b1',parent_id:'b',completed_at:null},{id:'p',parent_id:null,completed_at:null,pinned:1}];
+ const rows=tasks.map((task,i)=>row(task.id,100+i*50)),root=surface(rows),calls=[];
+ const feedback=create({getTask:id=>tasks.find(t=>t.id===id),move:async request=>{calls.push(request);return true;}}).install(root);
+ await root.fire('dragstart',rows[0]);assert.equal(rows[1].classList.contains('dragging'),true);
+ let over=await root.fire('dragover',rows[3],285);assert.equal(over.prevented,true);assert.equal(rows[3].classList.contains('drop-after'),true);
+ await root.fire('drop',rows[3],285);assert.deepEqual(calls,[{sourceId:'a',targetId:'b',placement:'after'}]);
+ await root.fire('dragstart',rows[0]);over=await root.fire('dragover',rows[4],305);assert.equal(over.prevented,false);await root.fire('drop',rows[4]);assert.equal(calls.length,1);feedback.destroy();
+});
+
+test('root drag remains in its source container with duplicate detail rows, and supports adjacent group gaps',async()=>{
+ const tasks=[{id:'a',parent_id:null,completed_at:null,pinned:0},{id:'a1',parent_id:'a',completed_at:null},{id:'b',parent_id:null,completed_at:null,pinned:0},{id:'b1',parent_id:'b',completed_at:null},{id:'p',parent_id:null,completed_at:null,pinned:1}];
+ const listRows=[row('a',100),row('a1',150),row('b',220),row('b1',270),row('p',340)],detailRow=row('b1',800),all=[...listRows,detailRow];
+ const list={querySelectorAll:()=>listRows,contains:node=>node===list||listRows.includes(node)},detail={querySelectorAll:()=>[detailRow],contains:node=>node===detail||node===detailRow};
+ for(const item of listRows)item.closest=selector=>selector.includes('.list-scroll')?list:item;
+ detailRow.closest=selector=>selector.includes('.list-scroll')?detail:detailRow;
+ const root=surface(all);root.contains=node=>node===list||node===detail||all.includes(node);
+ const calls=[],feedback=create({getTask:id=>tasks.find(t=>t.id===id),move:async request=>{calls.push(request);return true}}).install(root);
+ await root.fire('dragstart',listRows[0]);
+ let over=await root.fire('dragover',listRows[3],295);assert.equal(over.prevented,true);assert.equal(listRows[3].classList.contains('drop-after'),true);assert.equal(detailRow.classList.contains('drop-after'),false);
+ over=await root.fire('dragover',detailRow,810);assert.equal(over.prevented,false);assert.equal(detailRow.classList.contains('drop-after'),false);
+ over=await root.fire('dragover',list,210);assert.equal(over.prevented,true);assert.equal(listRows[2].classList.contains('drop-before'),true);
+ await root.fire('drop',list,210);assert.deepEqual(calls,[{sourceId:'a',targetId:'b',placement:'before'}]);
+ await root.fire('dragstart',listRows[0]);over=await root.fire('dragover',list,335);assert.equal(over.prevented,false,'gap closest to pinned group must not cross pin boundary');
+ await root.fire('drop',list,335);assert.equal(calls.length,1);feedback.destroy();
 });
 
 test('drag state uses live task data and never trusts an external text/plain payload',async()=>{

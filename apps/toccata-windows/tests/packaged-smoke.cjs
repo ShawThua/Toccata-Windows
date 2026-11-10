@@ -161,8 +161,14 @@ test('packaged executable bridge writes tasks, reads stats, exits and preserves 
   });
   assert.equal(edited.title, '更新后的任务');
   assert.equal(edited.priority, 2);
+  const child = await invoke(instance.client, 'tasks:create', { title:'测试子任务', parent_id:created.id });
+  const pinned = await invoke(instance.client, 'tasks:pin', { id:child.id, pinned:true });
+  assert.equal(pinned.id, created.id);
+  assert.equal(pinned.pinned, 1);
+  assert.equal(pinned.priority, 2);
   const completed = await invoke(instance.client, 'tasks:toggle', { id:created.id });
   assert.ok(Number.isFinite(completed.completed_at));
+  assert.equal(completed.pinned, 0);
   const now = Date.now();
   const stats = await invoke(instance.client, 'stats:query', { start_ms:now-86400000, end_ms:now+86400000 });
   assert.equal(stats.key_count, 0);
@@ -180,6 +186,10 @@ test('packaged executable bridge writes tasks, reads stats, exits and preserves 
   assert.equal(restored.completed_at, completed.completed_at);
   const reopened = await invoke(instance.client, 'tasks:toggle', { id:created.id });
   assert.equal(reopened.completed_at, null);
+  const other = await invoke(instance.client, 'tasks:create', { title:'另一测试任务' });
+  await invoke(instance.client, 'tasks:move', { sourceId:other.id, targetId:created.id, placement:'before', sort:'desc', language:'zh' });
+  const roots = (await invoke(instance.client, 'tasks:list')).tasks.filter(task=>task.parent_id===null);
+  assert.ok(roots.find(task=>task.id===other.id).root_order < roots.find(task=>task.id===created.id).root_order);
   await closeApp(instance);
   instance = null;
 });

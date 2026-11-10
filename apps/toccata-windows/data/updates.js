@@ -72,8 +72,8 @@ function parseRelease(release) {
   };
 }
 
-/** Explicit user action only. The caller supplies currentVersion and may inject
- * fetchImpl for tests. Always returns a status suitable for display. */
+/** Check the Windows release channel; callers may invoke this silently at startup.
+ * The caller supplies currentVersion and may inject fetchImpl for tests. */
 async function checkForUpdates({ currentVersion, fetchImpl = globalThis.fetch } = {}) {
   if (!parseVersion(currentVersion)) return { status:'error', reason:'invalid-current-version' };
   if (typeof fetchImpl !== 'function') return { status:'error', reason:'network-unavailable' };

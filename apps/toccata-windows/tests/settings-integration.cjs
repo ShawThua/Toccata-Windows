@@ -26,7 +26,7 @@ async function quit(x){await x.evalJS(`window.toccata.invoke('app:quit').catch((
 test('general settings persist, taskbar remains recoverable, tray routes defaults and notifications are explicit',{timeout:40000},async t=>{
  fs.mkdirSync(tempRoot,{recursive:true});const dir=fs.mkdtempSync(path.join(tempRoot,'general-settings-'));let x;
  t.after(async()=>{if(x&&x.proc.exitCode===null)x.proc.kill();if(x)x.ws.close();});
- x=await launch(dir);const defaults=await x.invoke('settings:get');assert.equal(defaults.hydrationEnabled,false);assert.equal(defaults.hideTaskbar,false);assert.equal(defaults.trayDefaultPage,'tasks');assert.equal(defaults.upstreamVersion,'0.1.3');
+ x=await launch(dir);const defaults=await x.invoke('settings:get');assert.equal(defaults.hydrationEnabled,false);assert.equal(defaults.hideTaskbar,false);assert.equal(defaults.trayDefaultPage,'tasks');assert.equal(defaults.upstreamVersion,'0.1.5');
  await assert.rejects(x.invoke('settings:set',{key:'theme',value:'arbitrary'}));assert.equal((await x.invoke('settings:get')).theme,'system');
  await x.invoke('settings:set',{key:'hideTaskbar',value:true});assert.equal((await x.control('state')).skipTaskbar,true);
  await x.invoke('settings:set',{key:'hideTaskbar',value:false});assert.equal((await x.control('state')).skipTaskbar,false);

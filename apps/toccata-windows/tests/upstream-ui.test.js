@@ -45,7 +45,7 @@ test('segmented controls preserve keyboard focus, themed geometry and reduced mo
  for(const theme of ['light','dark']){
   await client.eval(`document.documentElement.dataset.theme=${JSON.stringify(theme)};window.ToccataUpstreamUI.init();true`);await delay(230);
   const rects=await client.eval(`(()=>{const a=document.querySelector('.segments .active').getBoundingClientRect(),b=document.querySelector('.segment-indicator').getBoundingClientRect();return {a:a.x,b:b.x,aw:a.width,bw:b.width,dpr:devicePixelRatio,visible:document.visibilityState,style:document.querySelector(".segment-indicator").style.cssText,animations:document.querySelector(".segment-indicator").getAnimations().map(x=>({play:x.playState,time:x.currentTime}))}})()`);
-  assert.ok(Math.abs(rects.a-rects.b)<1,JSON.stringify(rects));assert.ok(Math.abs(rects.aw-rects.bw)<1);assert.equal(rects.dpr,2);
+  assert.ok(Math.abs(rects.a-rects.b)<1,JSON.stringify(rects));assert.ok(Math.abs(rects.aw-rects.bw)<1);assert.ok(Math.abs(rects.dpr-2)<0.001);
   if(process.env.TOCCATA_UPSTREAM_UI_OUTPUT){const out=path.resolve(process.env.TOCCATA_UPSTREAM_UI_OUTPUT);fs.mkdirSync(out,{recursive:true});const screenshot=await client.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});fs.writeFileSync(path.join(out,`segments-${theme}-200.png`),Buffer.from(screenshot.data,'base64'));}
  }
  assert.equal(await client.eval(`!!window.ToccataUpstreamUI.transitionContent(document.querySelector('#content'))`),true);

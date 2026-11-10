@@ -21,18 +21,27 @@
       newestFirst(a, b) || compareIds(a, b);
   }
 
-  // Workspace includes main lists and calendars. Tray mode is only for its task
-  // list, whose user-selected ordering applies within both completion groups.
+  // Workspace and tray use the same persisted order. Legacy unranked roots
+  // appear before manually ranked roots, in newest-first order.
   function compareRoots(a, b, { mode = 'workspace', sort = 'desc', language = 'zh' } = {}) {
     const state = compareState(a, b);
     if (state) return state;
-    if (mode === 'tray') {
-      const order = sort === 'title'
-        ? (collators[language] || collators.zh).compare(a.title, b.title)
-        : sort === 'asc' ? a.created_at - b.created_at : newestFirst(a, b);
-      return order || compareIds(a, b);
-    }
-    return (a.completed_at != null ? b.completed_at - a.completed_at : newestFirst(a, b)) || compareIds(a, b);
+    const pinned = Number(!!b.pinned) - Number(!!a.pinned);
+    if (pinned) return pinned;
+    let order;
+    if (sort === 'manual') {
+      const left = a.root_order == null ? -1 : a.root_order;
+      const right = b.root_order == null ? -1 : b.root_order;
+      order = left - right || newestFirst(a, b);
+    } else if (sort === 'title') {
+      order = (collators[language] || collators.zh).compare(a.title, b.title);
+    } else if (sort === 'asc') {
+      order = a.created_at - b.created_at;
+    } else if (sort === 'planned') {
+      order = (a.planned_at == null) - (b.planned_at == null) ||
+        (a.planned_at != null && b.planned_at != null ? a.planned_at - b.planned_at : 0);
+    } else order = newestFirst(a, b);
+    return order || compareIds(a, b);
   }
 
   return { compareChildren, compareRoots };

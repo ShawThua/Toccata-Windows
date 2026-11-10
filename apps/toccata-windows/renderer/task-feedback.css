@@ -8,5 +8,10 @@
 .task-row.task-drop-settled{animation:task-drop-settle 220ms ease-out}
 @keyframes task-drop-settle{from{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--accent) 42%,transparent)}to{box-shadow:inset 0 0 0 2px transparent}}
 .floating-content .task-drag-handle,.tray .task-drag-handle{flex-basis:8px;width:8px;height:14px;background-size:4px 4px;background-image:radial-gradient(circle,currentColor 1px,transparent 1.2px)}
+.task-pin svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.task-pin.is-pinned{color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.task-pinned-mark{font-size:9px;color:var(--accent);opacity:.85;margin-inline:2px}.task-sort{max-width:150px}.tray-head .task-sort{max-width:168px}
+/* Let the search field remain usable in narrow resizable task panes. */
+.list-header{container-type:inline-size}
+@container (max-width:400px){.search-row{flex-wrap:wrap}.search-row .search{flex:1 0 100%;min-width:0}.search-row .compact-select{flex:1 1 0;min-width:0;max-width:none}}
 :root[data-theme=dark] .task-drag-handle{opacity:.52}:root[data-theme=dark] .task-row:hover .task-drag-handle,:root[data-theme=dark] .task-row:focus-within .task-drag-handle{opacity:.9}
 @media(prefers-reduced-motion:reduce){.task-drag-handle{transition:none}.task-row.task-drop-settled{animation:none}}

@@ -1,6 +1,6 @@
 {
   "name": "toccata-windows",
-  "version": "0.1.3-win.2",
+  "version": "0.1.5-win.1",
   "private": true,
   "description": "Windows port of Toccata",
   "main": "main.js",

@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.3-win.2">下载 Windows 预览版</a> ·
+  <a href="https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.5-win.1">下载 Windows 预览版</a> ·
   <a href="https://github.com/KMnO4-zx/Toccata/releases">上游 macOS 下载</a> ·
   <a href="develop.md">开发指南</a> ·
   <a href="LICENSE">Apache-2.0</a>
@@ -22,11 +22,11 @@
 
 ## Windows 移植预览
 
-2026-11-02 预览版 `0.1.3-win.2` 在此前上游 v0.1.3 / build 21 迁移的基础上，补齐任务排序、保存按钮与 Ctrl+S、返回父任务、完成音效和子任务拖拽反馈。持续输入、计划日期与跨窗口编辑保护保留，优先级继续用灰、蓝、橙、红和文字区分。见 [任务交互更新](docs/windows-task-updates.md) 与 [上游功能迁移](docs/windows-upstream-v013.md)。
+2026-11-10 预览版 `0.1.5-win.1` 参考上游 v0.1.4–v0.1.5，加入主任务置顶、任务组拖拽、跨窗口共享排序、完成动画和 Windows 更新提示。持续输入、计划日期与跨窗口编辑保护保留，优先级继续用灰、蓝、橙、红和文字区分。见 [任务交互更新](docs/windows-task-updates.md) 与 [上游功能迁移](docs/windows-upstream-v013.md)。
 
-本 Fork 提供 [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata) 的**非官方 Windows 移植预览版**，最初基于 0.1.0，现已补充 v0.1.3 的通用功能，代码位于 [`apps/toccata-windows`](apps/toccata-windows)。支持 Windows 原生窗口、任务与托盘、键盘活动统计、68/84/87/104 键布局及自定义；原版 Fn 语音估算在 Windows 版中替换为平均击键频率。
+本 Fork 提供 [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata) 的**非官方 Windows 移植预览版**，最初基于 0.1.0，并移植部分截至 v0.1.5 的功能，代码位于 [`apps/toccata-windows`](apps/toccata-windows)。支持 Windows 原生窗口、任务与托盘、键盘活动统计、68/84/87/104 键布局及自定义；原版 Fn 语音估算在 Windows 版中替换为平均击键频率。
 
-**[下载 Windows 11 x64 预览包](https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.3-win.2)** · [通用配置](docs/images/windows-v013-settings.png) · [托盘活动](docs/images/windows-v013-tray.png) · [任务日历](docs/images/windows-v013-calendar.png)
+**[下载 Windows 11 x64 预览包](https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.5-win.1)** · [通用配置](docs/images/windows-v013-settings.png) · [托盘活动](docs/images/windows-v013-tray.png) · [任务日历](docs/images/windows-v013-calendar.png)
 
 使用方法、采集与数据说明、已知问题见 [Windows 预览版说明](docs/windows-preview.md)，构建方法见 [Windows 开发说明](apps/toccata-windows/README.md)。当前不是完整稳定版，也不宣称与原版 100% 等价；上游 Releases 链接不代表提供本移植的 Windows 包。
 

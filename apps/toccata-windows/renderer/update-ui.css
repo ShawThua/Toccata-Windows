@@ -1,0 +1,2 @@
+.about .update-beacon{display:block;flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:#ef8a24;box-shadow:0 0 0 3px #ef8a241b;margin-left:-3px}
+:root[data-theme=dark] .about .update-beacon{background:#ffad4e;box-shadow:0 0 0 3px #ffad4e24}

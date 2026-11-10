@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.3-win.2">Download Windows Preview</a> ·
+  <a href="https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.5-win.1">Download Windows Preview</a> ·
   <a href="https://github.com/KMnO4-zx/Toccata/releases">Upstream macOS Releases</a> ·
   <a href="develop.md">Developer Guide (Chinese)</a> ·
   <a href="LICENSE">Apache-2.0</a>
@@ -22,13 +22,13 @@
 
 ## Unofficial Windows Preview
 
-The November 2, 2026 preview, `0.1.3-win.2`, builds on the upstream v0.1.3 / build 21 migration with consistent task ordering, a Save button and Ctrl+S, navigation back to the parent task, completion sound handling and subtask drag feedback. It retains the fixes for continuous typing, planned dates and editing across windows. Task priorities use gray, blue, orange and red, with text labels. See the [task interaction updates](docs/windows-task-updates.md) and [upstream migration notes](docs/windows-upstream-v013.md).
+The November 10, 2026 preview, `0.1.5-win.1`, adds task pinning, whole-group dragging, shared sorting, completion transitions and a Windows update beacon, inspired by upstream v0.1.4–v0.1.5. It retains the fixes for continuous typing, planned dates and editing across windows. Task priorities use gray, blue, orange and red, with text labels. See the [task interaction updates](docs/windows-task-updates.md) and [upstream migration notes](docs/windows-upstream-v013.md).
 
-This fork provides an **unofficial Windows preview port** of [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata) under [`apps/toccata-windows`](apps/toccata-windows). Originally based on 0.1.0, it now includes the common features added through v0.1.3, native Windows window controls, tasks and tray workflows, keyboard activity statistics, and configurable 68/84/87/104-key layouts. The Windows port replaces the original Fn voice estimate with a keystroke rate based on active minutes.
+This fork provides an **unofficial Windows preview port** of [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata) under [`apps/toccata-windows`](apps/toccata-windows). Originally based on 0.1.0, it now includes selected features through v0.1.5, native Windows window controls, tasks and tray workflows, keyboard activity statistics, and configurable 68/84/87/104-key layouts. The Windows port replaces the original Fn voice estimate with a keystroke rate based on active minutes.
 
-**[Download the Windows 11 x64 preview](https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.3-win.2)** · [Settings](docs/images/windows-v013-settings.png) · [Tray activity](docs/images/windows-v013-tray.png) · [Task calendar](docs/images/windows-v013-calendar.png)
+**[Download the Windows 11 x64 preview](https://github.com/WenNinghan/Toccata-Windows/releases/tag/v0.1.5-win.1)** · [Settings](docs/images/windows-v013-settings.png) · [Tray activity](docs/images/windows-v013-tray.png) · [Task calendar](docs/images/windows-v013-calendar.png)
 
-Read the [Windows preview notes and known issues](docs/windows-preview.md) and [build instructions](apps/toccata-windows/README.md) before use. This is not a complete stable release or a claim of 100% parity. The upstream release link does not distribute this Windows build. This version supports user-triggered Windows updates; upgrading from the October 29 preview requires a manual download.
+Read the [Windows preview notes and known issues](docs/windows-preview.md) and [build instructions](apps/toccata-windows/README.md) before use. This is not a complete stable release or a claim of 100% parity. The upstream release link does not distribute this Windows build. This version checks for Windows updates at startup; downloading and installing remain user-triggered; upgrading from the October 29 preview requires a manual download.
 
 The original author's macOS introduction, first-person story and acknowledgements are preserved below. The project retains the [Apache-2.0 license](LICENSE); see [Windows third-party notices](apps/toccata-windows/THIRD-PARTY-NOTICES.md).
 

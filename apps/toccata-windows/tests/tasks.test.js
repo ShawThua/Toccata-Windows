@@ -198,8 +198,95 @@ test('old schema migrates missing columns safely and preserves legacy data', t =
   assert.equal(store.get('old').title, 'kept');
   assert.equal(store.get('old').priority, 0);
   assert.equal(store.get('old').subtask_order, null);
+  assert.equal(store.get('old').pinned, 0);
+  assert.equal(store.get('old').root_order, null);
   store.close();
   const reopened = new TaskStore(filename);
   assert.equal(reopened.get('old').title, 'kept');
   reopened.close();
+});
+
+test('pinning a child applies to its root and completion unpins only the completed root', t => {
+  const { store } = fixture(t);
+  const root = store.create({ title:'root' });
+  const child = store.create({ title:'child', parent_id:root.id });
+  store.setPriority(root.id, 3);
+  assert.equal(store.setPinned(child.id, true).id, root.id);
+  assert.equal(store.get(root.id).pinned, 1);
+  assert.equal(store.get(child.id).pinned, 0);
+  store.setCompleted(child.id, true);
+  assert.equal(store.get(root.id).pinned, 1);
+  store.setCompleted(root.id, true);
+  assert.equal(store.get(root.id).pinned, 0);
+  assert.equal(store.get(root.id).priority, 3);
+  assert.throws(() => store.setPinned(root.id, true), /已完成/);
+  store.setCompleted(root.id, false);
+  assert.equal(store.get(root.id).pinned, 0);
+  assert.throws(() => store.setPinned(root.id, 1), /布尔值/);
+});
+
+test('previous Windows schema migration preserves task contents and parent relationships across reopen', t => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'toccata-win-migrate-'));
+  t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const filename=path.join(dir,'tasks.sqlite');
+  const old=new DatabaseSync(filename);
+  old.exec(`CREATE TABLE tasks(id TEXT PRIMARY KEY NOT NULL,parent_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,details TEXT NOT NULL DEFAULT '',planned_at REAL,created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,completed_at REAL,priority INTEGER NOT NULL DEFAULT 0,subtask_order INTEGER);
+    INSERT INTO tasks VALUES('p',NULL,'parent','body',12,1,2,NULL,3,NULL);
+    INSERT INTO tasks VALUES('c','p','child','details',NULL,3,4,5,1,7);`);
+  old.close();
+  let store=new TaskStore(filename);
+  const before=store.list();
+  assert.deepEqual(before.map(x=>[x.id,x.parent_id,x.title,x.details,x.planned_at,x.created_at,x.updated_at,x.completed_at,x.priority,x.subtask_order,x.pinned,x.root_order]),[
+    ['p',null,'parent','body',12,1,2,null,3,null,0,null],
+    ['c','p','child','details',null,3,4,5,1,7,0,null],
+  ]);
+  store.close();
+  store=new TaskStore(filename);
+  assert.deepEqual(store.list(),before);
+  store.close();
+});
+
+test('failure while unpinning rolls back completion for parent and children', t => {
+  const {store}=fixture(t);
+  const root=store.create({title:'root'});
+  const child=store.create({title:'child',parent_id:root.id});
+  store.setPinned(root.id,true);
+  store.db.exec("CREATE TRIGGER reject_unpin BEFORE UPDATE OF pinned ON tasks WHEN OLD.pinned=1 AND NEW.pinned=0 BEGIN SELECT RAISE(ABORT,'unpin error'); END");
+  assert.throws(()=>store.setCompleted(root.id,true),/unpin error/);
+  assert.equal(store.get(root.id).pinned,1);
+  assert.equal(store.get(root.id).completed_at,null);
+  assert.equal(store.get(child.id).completed_at,null);
+});
+
+test('root moves include filtered-out tasks, preserve other roots and reject group crossings', t => {
+  const { store, setTime } = fixture(t, 1);
+  const a=store.create({title:'A'});
+  setTime(2); const b=store.create({title:'B'});
+  setTime(3); const c=store.create({title:'C'});
+  setTime(4); const d=store.create({title:'D'});
+  const child=store.create({title:'child',parent_id:a.id});
+  store.moveRoot(a.id,c.id,'before',{sort:'asc',language:'en'});
+  const ordered=()=>store.list().filter(x=>!x.parent_id).sort((x,y)=>x.root_order-y.root_order).map(x=>x.title);
+  assert.deepEqual(ordered(), ['B','A','C','D']);
+  assert.equal(store.get(child.id).root_order,null);
+  store.moveRoot(d.id,b.id,'before',{sort:'manual',language:'en'});
+  assert.deepEqual(ordered(), ['D','B','A','C']);
+  store.setPinned(b.id,true);
+  assert.throws(()=>store.moveRoot(a.id,b.id,'before',{sort:'manual'}),/置顶组/);
+  store.setCompleted(c.id,true);
+  assert.throws(()=>store.moveRoot(a.id,c.id,'before',{sort:'manual'}),/完成状态/);
+  assert.throws(()=>store.moveRoot(child.id,a.id,'before'),/主任务/);
+  assert.throws(()=>store.moveRoot(a.id,d.id,'before',{sort:'bad'}),/排序方式/);
+});
+
+test('failure during root reorder rolls back all rank changes', t => {
+  const {store,setTime}=fixture(t,1);
+  const a=store.create({title:'A'});
+  setTime(2); const b=store.create({title:'B'});
+  store.db.exec("CREATE TRIGGER reject_rank BEFORE UPDATE OF root_order ON tasks WHEN NEW.title='B' BEGIN SELECT RAISE(ABORT,'rank error'); END");
+  assert.throws(()=>store.moveRoot(a.id,b.id,'after',{sort:'asc'}),/rank error/);
+  assert.equal(store.get(a.id).root_order,null);
+  assert.equal(store.get(b.id).root_order,null);
 });

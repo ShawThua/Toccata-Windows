@@ -30,7 +30,7 @@ electron.app.on('browser-window-created',(_event,created)=>{
   const request=JSON.parse(line.slice('QA_SETTINGS '.length));let result,error;
   try{
    if(request.op==='tray-click'){tray.emit('click');result=true;}
-   else if(request.op==='state'){const main=electron.BrowserWindow.getAllWindows().find(w=>!w.webContents.getURL().includes('?'));result={skipTaskbar:main.__skipTaskbar===true,events:main.__events,allEvents:electron.BrowserWindow.getAllWindows().flatMap(w=>w.__events),notifications};}
+   else if(request.op==='state'){const mainURL=require('node:url').pathToFileURL(path.resolve(__dirname,'../renderer/index.html')).href;const main=electron.BrowserWindow.getAllWindows().find(w=>w.webContents.getURL()===mainURL);result={skipTaskbar:main.__skipTaskbar===true,events:main.__events,allEvents:electron.BrowserWindow.getAllWindows().flatMap(w=>w.__events),notifications};}
    else throw Error('Unknown settings test operation');
   }catch(e){error=e.message;}
   if(!created.isDestroyed())await created.webContents.executeJavaScript(`window.__settingsReply=${JSON.stringify({id:request.id,result,error})}`);

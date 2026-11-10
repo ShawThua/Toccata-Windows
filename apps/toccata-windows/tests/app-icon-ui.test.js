@@ -72,7 +72,7 @@ test('transparent, missing and undecodable app icons render correctly in both th
   keys.close();identities.close();
   instance=await launch(dir);assert.equal((await invoke(instance.cdp,'capture:status')).state,'disabled');
   await instance.cdp.send('Emulation.setDeviceMetricsOverride',{width:1200,height:820,deviceScaleFactor:2,mobile:false});
-  assert.equal(await instance.cdp.evaluate('window.devicePixelRatio'),2);
+  assert.ok(Math.abs(await instance.cdp.evaluate('window.devicePixelRatio')-2)<0.001);
   await instance.cdp.evaluate("document.querySelector('[data-page=ranking]').click();true");
   const rowsExpression=`(()=>{const rows=[...document.querySelectorAll('.app-row')];return rows.map(row=>{const box=row.querySelector('.app-icon'),image=box?.querySelector('.app-image'),fallback=box?.querySelector('.app-icon-fallback');if(!box||!fallback)return null;const fallbackStyle=getComputedStyle(fallback);return {name:row.querySelector('.app-info').innerText.split('\\n')[0],loaded:box.classList.contains('icon-loaded'),image:!!image,naturalWidth:image?.naturalWidth||0,fallbackVisible:fallbackStyle.display!=='none'&&fallbackStyle.visibility!=='hidden'&&fallbackStyle.opacity!=='0',imageWidth:image?.getBoundingClientRect().width||0}})})()`;
   for(const theme of ['light','dark']){

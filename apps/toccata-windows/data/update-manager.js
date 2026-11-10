@@ -32,11 +32,25 @@ function checksumFor(text,name){
 }
 class UpdateManager{
  constructor({dataDir,currentVersion,fetchImpl=globalThis.fetch,prepare=runPreparation,onProgress=()=>{}}){
-  this.root=path.join(dataDir,'updates');this.version=currentVersion;this.fetch=fetchImpl;this.prepare=prepare;this.onProgress=onProgress;this.state={phase:'idle',received:0,total:0,percent:0};this.release=null;this.controller=null;this.prepared=null;
+  this.root=path.join(dataDir,'updates');this.version=currentVersion;this.fetch=fetchImpl;this.prepare=prepare;this.onProgress=onProgress;this.state={phase:'idle',received:0,total:0,percent:0,checkStatus:'idle',availableVersion:null,release_url:null,canDownload:false,checkReason:null,revision:0};this.release=null;this.controller=null;this.prepared=null;this.checkFlight=null;
  }
  status(){return {...this.state,canInstall:!!this.prepared};}
- publish(patch){Object.assign(this.state,patch);this.onProgress(this.status());return this.status();}
- async check(){this.release=await checkForUpdates({currentVersion:this.version,fetchImpl:this.fetch});return this.release;}
+ publish(patch){Object.assign(this.state,patch);this.state.revision++;this.onProgress(this.status());return this.status();}
+ check(){
+  // Share one request between the silent startup check and any manual check.
+  // Checking never changes the download/install phase or starts a download.
+  if(this.checkFlight)return this.checkFlight;
+  this.publish({checkStatus:'checking',checkReason:null});
+  this.checkFlight=(async()=>{
+   let result;
+   try{result=await checkForUpdates({currentVersion:this.version,fetchImpl:this.fetch});}
+   catch{result={status:'error',reason:'network-error'};}
+   this.release=result;
+   this.publish({checkStatus:result.status,availableVersion:result.version||null,release_url:result.release_url||null,canDownload:result.status==='update-available'&&!!result.can_download,checkReason:result.reason||null});
+   return result;
+  })().finally(()=>{this.checkFlight=null;});
+  return this.checkFlight;
+ }
  cancel(){this.controller?.abort();return this.status();}
  async download(){
   if(this.controller)throw Error('An update download is already active');

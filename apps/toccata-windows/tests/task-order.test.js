@@ -9,16 +9,21 @@ const { compareChildren, compareRoots } = require('../renderer/task-order');
 const task = (id, values = {}) => ({ id, title: id, created_at: 10, completed_at: null, subtask_order: null, ...values });
 const ids = (tasks, comparator) => [...tasks].sort(comparator).map(item => item.id);
 
-test('workspace pending roots use creation dates and completed roots use completion dates', () => {
+test('workspace uses the same chosen root order for pending and completed groups', () => {
   const tasks = [
     task('old-completed-late', { created_at: 1, completed_at: 90 }),
     task('new-completed-early', { created_at: 30, completed_at: 60 }),
     task('older-pending', { created_at: 5 }),
     task('newer-pending', { created_at: 20 }),
   ];
-  assert.deepEqual(ids(tasks, compareRoots), ['newer-pending', 'older-pending', 'old-completed-late', 'new-completed-early']);
-  // Only the explicitly selected tray mode changes root ordering.
-  assert.deepEqual(ids(tasks, (a, b) => compareRoots(a, b, { sort: 'asc' })), ids(tasks, compareRoots));
+  assert.deepEqual(ids(tasks, compareRoots), ['newer-pending', 'older-pending', 'new-completed-early', 'old-completed-late']);
+  assert.deepEqual(ids(tasks, (a, b) => compareRoots(a, b, { sort: 'asc' })), ['older-pending', 'newer-pending', 'old-completed-late', 'new-completed-early']);
+});
+
+test('pinned tasks precede ordinary tasks within a completion group; manual and planned modes keep stable ties', () => {
+  const roots=[task('ordinary-new',{created_at:20}),task('pinned',{pinned:1,created_at:2,root_order:3}),task('unranked',{created_at:15}),task('rank-1',{root_order:1,planned_at:20}),task('rank-0',{root_order:0,planned_at:10}),task('done',{completed_at:1,pinned:1})];
+  assert.deepEqual(ids(roots,(a,b)=>compareRoots(a,b,{sort:'manual'})),['pinned','ordinary-new','unranked','rank-0','rank-1','done']);
+  assert.deepEqual(ids(roots,(a,b)=>compareRoots(a,b,{sort:'planned'})),['pinned','rank-0','rank-1','ordinary-new','unranked','done']);
 });
 
 test('equal root dates have deterministic ID order and epoch zero is completed', () => {

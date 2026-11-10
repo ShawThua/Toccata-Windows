@@ -5,8 +5,9 @@ const { DatabaseSync } = require('node:sqlite');
 const { randomUUID } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { compareRoots } = require('../renderer/task-order');
 
-const TASK_COLUMNS = 'id,parent_id,title,details,planned_at,created_at,updated_at,completed_at,priority,subtask_order';
+const TASK_COLUMNS = 'id,parent_id,title,details,planned_at,created_at,updated_at,completed_at,priority,subtask_order,pinned,root_order';
 
 function validatedTitle(value) {
   if (typeof value !== 'string' || !value.trim()) throw new Error('任务名称不能为空');
@@ -45,11 +46,13 @@ class TaskStore {
           title TEXT NOT NULL CHECK(length(trim(title)) > 0),
           details TEXT NOT NULL DEFAULT '', planned_at REAL, created_at REAL NOT NULL,
           updated_at REAL NOT NULL, completed_at REAL, priority INTEGER NOT NULL DEFAULT 0,
-          subtask_order INTEGER
+          subtask_order INTEGER, pinned INTEGER NOT NULL DEFAULT 0, root_order INTEGER
         )`);
         const columns = new Set(this.db.prepare('PRAGMA table_info(tasks)').all().map(x => x.name));
         if (!columns.has('priority')) this.db.exec('ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 0');
         if (!columns.has('subtask_order')) this.db.exec('ALTER TABLE tasks ADD COLUMN subtask_order INTEGER');
+        if (!columns.has('pinned')) this.db.exec('ALTER TABLE tasks ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0');
+        if (!columns.has('root_order')) this.db.exec('ALTER TABLE tasks ADD COLUMN root_order INTEGER');
         this.db.exec(`CREATE INDEX IF NOT EXISTS task_parent ON tasks(parent_id);
           CREATE INDEX IF NOT EXISTS task_completed ON tasks(completed_at);
           CREATE TABLE IF NOT EXISTS task_progress (
@@ -139,10 +142,29 @@ class TaskStore {
     });
   }
 
+  setPinned(id, pinned) {
+    if (typeof pinned !== 'boolean') throw new TypeError('置顶状态必须是布尔值');
+    return this.transaction(() => {
+      let task = this.requireTask(id);
+      const visited = new Set();
+      while (task.parent_id !== null) {
+        if (visited.has(task.id)) throw new Error('任务父级关系异常');
+        visited.add(task.id);
+        task = this.requireTask(task.parent_id);
+      }
+      if (pinned && task.completed_at !== null) throw new Error('已完成的主任务不能置顶');
+      if (Boolean(task.pinned) !== pinned) {
+        this.db.prepare('UPDATE tasks SET pinned=?,updated_at=? WHERE id=?')
+          .run(Number(pinned), this.currentTime(), task.id);
+      }
+      return this.requireTask(task.id);
+    });
+  }
+
   setCompleted(id, completed) {
     if (typeof completed !== 'boolean') throw new TypeError('完成状态必须是布尔值');
     return this.transaction(() => {
-      this.requireTask(id);
+      const task = this.requireTask(id);
       const at = this.currentTime();
       if (completed) {
         this.db.prepare(`WITH RECURSIVE descendants(id) AS (
@@ -150,6 +172,11 @@ class TaskStore {
           SELECT tasks.id FROM tasks JOIN descendants ON tasks.parent_id=descendants.id
         ) UPDATE tasks SET completed_at=?,updated_at=?
           WHERE id IN (SELECT id FROM descendants) AND completed_at IS NULL`).run(id, at, at);
+        // Only completing the root unpins its group; completing a child does
+        // not change the still-pending parent's pin.
+        if (task.parent_id === null && task.pinned) {
+          this.db.prepare('UPDATE tasks SET pinned=0,updated_at=? WHERE id=?').run(at, id);
+        }
       } else this.reopenAncestors(id, at);
       return this.requireTask(id);
     });
@@ -179,6 +206,29 @@ class TaskStore {
       const update = this.db.prepare('UPDATE tasks SET subtask_order=? WHERE id=?');
       siblings.forEach((task, order) => update.run(order, task.id));
       return siblings.map(task => this.requireTask(task.id));
+    });
+  }
+
+  moveRoot(sourceId, targetId, placement, { sort = 'desc', language = 'zh' } = {}) {
+    if (!['before', 'after'].includes(placement)) throw new Error('位置必须是 before 或 after');
+    if (!['manual', 'desc', 'asc', 'title', 'planned'].includes(sort)) throw new Error('无效的排序方式');
+    if (!['zh', 'en'].includes(language)) throw new Error('无效的语言');
+    return this.transaction(() => {
+      const source = this.requireTask(sourceId), target = this.requireTask(targetId);
+      if (source.id === target.id || source.parent_id !== null || target.parent_id !== null ||
+          (source.completed_at === null) !== (target.completed_at === null) || Boolean(source.pinned) !== Boolean(target.pinned)) {
+        throw new Error('只能在同一完成状态、同一置顶组的主任务之间排序');
+      }
+      // Include rows hidden by the current filter before changing to manual order.
+      const roots = this.list().filter(task => task.parent_id === null)
+        .sort((a, b) => compareRoots(a, b, { mode: 'tray', sort, language }));
+      const from = roots.findIndex(task => task.id === source.id);
+      roots.splice(from, 1);
+      const index = roots.findIndex(task => task.id === target.id);
+      roots.splice(index + Number(placement === 'after'), 0, source);
+      const update = this.db.prepare('UPDATE tasks SET root_order=? WHERE id=?');
+      roots.forEach((task, order) => update.run(order, task.id));
+      return roots.map(task => this.requireTask(task.id));
     });
   }
 

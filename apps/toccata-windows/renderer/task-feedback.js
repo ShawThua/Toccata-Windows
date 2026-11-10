@@ -8,12 +8,12 @@
         if (typeof getTask !== 'function' || typeof move !== 'function') {
             throw new TypeError('Task feedback requires getTask and move callbacks');
         }
-        let surface = null, sourceId = null, sourceRow = null, targetRow = null;
+        let surface = null, sourceId = null, sourceRow = null, targetRow = null, dragScope = null;
         let moving = false, destroyed = false, audio = null, playing = false;
         let playPending = false, playRun = 0;
         const timers = new Set();
         const report = error => { try { onError(error); } catch (_) {} };
-        const rows = () => surface ? [...surface.querySelectorAll('.task-row')] : [];
+        const rows = () => surface ? [...(dragScope || surface).querySelectorAll('.task-row')] : [];
         const view = () => surface?.defaultView || surface?.ownerDocument?.defaultView || globalThis;
         const markerRoot = () => surface?.documentElement || surface;
 
@@ -27,21 +27,69 @@
             for (const row of rows()) row.classList.remove('dragging', 'drop-before', 'drop-after');
             markerRoot()?.classList?.remove('task-reordering');
             sourceId = sourceRow = null;
+            dragScope = null;
         }
         function eventRow(event) {
             const target = event.target?.nodeType === 3 ? event.target.parentElement : event.target;
             const row = target?.closest?.('.task-row[draggable]');
-            return row && (!surface.contains || surface.contains(row)) ? row : null;
+            return row && (!surface.contains || surface.contains(row)) && (!dragScope || dragScope.contains(row)) ? row : null;
+        }
+        function rootTask(task) {
+            const seen = new Set();
+            while (task?.parent_id != null && !seen.has(task.id)) {
+                seen.add(task.id);
+                task = getTask(task.parent_id);
+            }
+            return task || null;
+        }
+        function targetFor(event) {
+            const row = eventRow(event), source = getTask(sourceId);
+            if (!row || !source || source.parent_id != null) return row;
+            const root = rootTask(getTask(row.dataset.id));
+            return rows().find(item => item.dataset.id === root?.id) || row;
         }
         function validTarget(row) {
             if (!sourceId || !row || row.dataset.id === sourceId) return false;
             const source = getTask(sourceId), target = getTask(row.dataset.id);
-            return !!source && !!target && source.parent_id != null && target.parent_id === source.parent_id &&
-                (source.completed_at != null) === (target.completed_at != null);
+            return !!source && !!target && target.parent_id === source.parent_id &&
+                (source.completed_at != null) === (target.completed_at != null) &&
+                (source.parent_id != null || !!source.pinned === !!target.pinned);
+        }
+        function groupLast(row) {
+            const items = rows(), start = items.indexOf(row);
+            let last = row;
+            for (let i = start + 1; i < items.length; i++) {
+                const task = getTask(items[i].dataset.id);
+                if (!task || task.parent_id == null || rootTask(task)?.id !== row.dataset.id) break;
+                last = items[i];
+            }
+            return last;
         }
         function placement(event, row) {
             const rect = row.getBoundingClientRect();
-            return Number(event.clientY) < rect.top + rect.height / 2 ? 'before' : 'after';
+            let bottom = rect.top + rect.height;
+            if (getTask(sourceId)?.parent_id == null) {
+                const last = groupLast(row).getBoundingClientRect();
+                bottom = Math.max(bottom, last.top + last.height);
+            }
+            return Number(event.clientY) < (rect.top + bottom) / 2 ? 'before' : 'after';
+        }
+        function resolveTarget(event) {
+            const row = targetFor(event);
+            if (row) return {row, where:placement(event, row)};
+            if (!sourceId || getTask(sourceId)?.parent_id != null ||
+                !(dragScope || surface)?.contains?.(event.target)) return null;
+            const roots = rows().filter(item => getTask(item.dataset.id)?.parent_id == null);
+            const y = Number(event.clientY);
+            for (let i = 0; i + 1 < roots.length; i++) {
+                const previous = roots[i], next = roots[i + 1];
+                const prevRect = groupLast(previous).getBoundingClientRect(), nextRect = next.getBoundingClientRect();
+                const bottom = prevRect.top + prevRect.height;
+                if (y >= bottom && y <= nextRect.top) {
+                    return y - bottom < nextRect.top - y ? {row:previous,where:'after'} : {row:next,where:'before'};
+                }
+            }
+            return null;
         }
         function settle(id) {
             if (!surface || view().matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
@@ -56,13 +104,18 @@
         function dragstart(event) {
             const row = eventRow(event), task = row && getTask(row.dataset.id);
             clearDrag();
-            if (destroyed || moving || !task || task.parent_id == null) {
+            if (destroyed || moving || !task) {
                 if (row) event.preventDefault();
                 return;
             }
             sourceId = task.id;
             sourceRow = row;
+            const container = row.closest?.('.list-scroll,.tray-scroll,.detail-content,.floating-content');
+            dragScope = container?.querySelectorAll && container?.contains ? container : null;
             row.classList.add('dragging');
+            if (task.parent_id == null) for (const item of rows()) {
+                if (rootTask(getTask(item.dataset.id))?.id === task.id) item.classList.add('dragging');
+            }
             markerRoot()?.classList?.add('task-reordering');
             if (event.dataTransfer) {
                 event.dataTransfer.effectAllowed = 'move';
@@ -71,7 +124,7 @@
         }
         function dragover(event) {
             if (!sourceId) return;
-            const row = eventRow(event);
+            const target = resolveTarget(event), row = target?.row;
             clearTarget();
             if (!validTarget(row)) {
                 if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
@@ -79,17 +132,18 @@
             }
             event.preventDefault();
             if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-            targetRow = row;
-            row.classList.add('drop-' + placement(event, row));
+            const where = target.where;
+            targetRow = where === 'after' && getTask(sourceId)?.parent_id == null ? groupLast(row) : row;
+            targetRow.classList.add('drop-' + where);
         }
         function dragleave(event) {
             if (targetRow && !targetRow.contains(event.relatedTarget)) clearTarget();
         }
         async function drop(event) {
-            const row = eventRow(event);
+            const target = resolveTarget(event), row = target?.row;
             if (!validTarget(row) || moving || destroyed) { clearDrag(); return; }
             event.preventDefault();
-            const request = {sourceId, targetId:row.dataset.id, placement:placement(event, row)};
+            const request = {sourceId, targetId:row.dataset.id, placement:target.where};
             clearDrag();
             moving = true;
             try {

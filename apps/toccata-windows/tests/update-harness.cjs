@@ -7,7 +7,12 @@ const bytes=fs.readFileSync(process.env.TOCCATA_UPDATE_FIXTURE),digest=createHas
 const current=require('../data/updates').parseVersion(require('../package.json').version);
 const tag=`v${current.major}.${current.minor}.${current.patch+1}-fixture.1`,name='Toccata-Windows-preview-0.1.3-x64.zip',base='https://github.com/WenNinghan/Toccata-Windows/releases/';let mode='slow';
 globalThis.fetch=async(url,options={})=>{
- if(String(url).startsWith('https://api.github.com/repos/WenNinghan/Toccata-Windows/releases'))return new Response(JSON.stringify([{tag_name:tag,prerelease:true,html_url:base+'tag/'+tag,assets:[{name,size:bytes.length,state:'uploaded',digest:'sha256:'+digest,browser_download_url:base+'download/'+tag+'/'+name}]}]));
+ if(String(url).startsWith('https://api.github.com/repos/WenNinghan/Toccata-Windows/releases')){
+  const updateCase=process.env.TOCCATA_UPDATE_CASE||'available';
+  if(updateCase==='offline')throw Error('offline fixture');
+  const assets=updateCase==='incompatible'?[]:[{name,size:bytes.length,state:'uploaded',digest:'sha256:'+digest,browser_download_url:base+'download/'+tag+'/'+name}];
+  return new Response(JSON.stringify([{tag_name:tag,prerelease:true,html_url:base+'tag/'+tag,assets}]));
+ }
  if(url!==base+'download/'+tag+'/'+name)throw Error('Unexpected test request');
  if(mode==='good')return new Response(bytes);
  if(mode==='corrupt'){const changed=Buffer.from(bytes);changed[0]^=255;return new Response(changed);}

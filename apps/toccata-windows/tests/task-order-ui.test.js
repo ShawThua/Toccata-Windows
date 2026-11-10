@@ -154,13 +154,13 @@ async function screenshot(client, name) {
   fs.writeFileSync(path.join(proof, name + '.png'), Buffer.from(image.data, 'base64'));
 }
 async function measureControls(client, floating) {
-  return client.evaluate(`(()=>{const floating=${floating},bar=document.querySelector(floating?'.floating-bar':'.detail-bar'),pane=document.querySelector(floating?'.floating-editor':'#detail');const toRect=node=>{const r=node.getBoundingClientRect();return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height}};const controls=[...bar.querySelectorAll('.priority-control,.task-save-button,[data-action="delete"]')].map(node=>({name:node.classList.contains('priority-control')?'priority':node.dataset.action,...toRect(node)}));const parent=document.querySelector('.task-parent-link'),status=document.querySelector('#save-status');return{dpr:devicePixelRatio,width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,pane:toRect(pane),bar:toRect(bar),parent:parent?toRect(parent):null,status:status?{text:status.textContent.trim(),clientWidth:status.clientWidth,scrollWidth:status.scrollWidth,...toRect(status)}:null,controls}})()`);
+  return client.evaluate(`(()=>{const floating=${floating},bar=document.querySelector(floating?'.floating-bar':'.detail-bar'),pane=document.querySelector(floating?'.floating-editor':'#detail');const toRect=node=>{const r=node.getBoundingClientRect();return{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height}};const controls=[...bar.querySelectorAll('.priority-control,.task-save-button,[data-action="delete"],[data-action="pin"]')].map(node=>({name:node.classList.contains('priority-control')?'priority':node.dataset.action,...toRect(node)}));const parent=document.querySelector('.task-parent-link'),status=document.querySelector('#save-status'),search=document.querySelector('#search');return{dpr:devicePixelRatio,width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,pane:toRect(pane),bar:toRect(bar),parent:parent?toRect(parent):null,search:search?toRect(search):null,status:status?{text:status.textContent.trim(),clientWidth:status.clientWidth,scrollWidth:status.scrollWidth,...toRect(status)}:null,controls}})()`);
 }
 function assertControls(layout) {
-  assert.equal(layout.dpr, 2); assert.ok(layout.documentWidth <= layout.width + 1, 'horizontal page overflow');
+  assert.ok(Math.abs(layout.dpr - 2) < 0.001); assert.ok(layout.documentWidth <= layout.width + 1, 'horizontal page overflow');
   assert.equal(layout.status?.text, '已保存', 'save status must show its complete saved message');
   assert.ok(layout.status.width > 0 && layout.status.scrollWidth <= layout.status.clientWidth, 'save status text must fit without truncation');
-  assert.equal(layout.controls.length, 3, 'priority, save and delete controls must be visible');
+  assert.equal(layout.controls.length, 4, 'priority, pin, save and delete controls must be visible');
   for (const control of layout.controls) {
     assert.ok(control.width > 0 && control.height > 0);
     assert.ok(control.left >= layout.bar.left - 1 && control.right <= layout.bar.right + 1, control.name + ' must fit header');
@@ -195,23 +195,23 @@ test('task ordering, synthetic drag persistence and compact editor controls agre
   });
   app = await launch(dir); let main = app.main, tray = app.tray;
   for (const page of ['tasks', 'inbox', 'calendar']) {
-    await navigate(main, page); await assertOrder(main, '#left', ['root-old', 'root-new'], page + ' completed roots');
+    await navigate(main, page); await assertOrder(main, '#left', ['root-new', 'root-old'], page + ' completed roots');
     report.views.push({ page, completedRoots: await rows(main, '#left', ['root-old', 'root-new']) });
   }
   await click(tray, '[data-action="tray-page"][data-value="tasks"]');
-  await change(tray, '#tray-sort', 'asc');
+  await change(tray, '#task-sort', 'asc');
   await assertOrder(tray, '.tray-scroll', ['parent', 'other-parent'], 'tray ascending pending roots');
   await assertOrder(tray, '.tray-scroll', ['root-old', 'root-new'], 'tray ascending completed roots');
-  await change(tray, '#tray-sort', 'title');
+  await change(tray, '#task-sort', 'title');
   await assertOrder(tray, '.tray-scroll', ['root-new', 'root-old'], 'tray natural title completed roots');
   await click(tray, '[data-action="tray-page"][data-value="calendar"]');
-  await assertOrder(tray, '.tray-scroll', ['root-old', 'root-new'], 'tray calendar ignores title sort');
-  await assertOrder(tray, '.tray-scroll', ['other-parent', 'parent'], 'tray calendar default pending order');
+  await assertOrder(tray, '.tray-scroll', ['root-new', 'root-old'], 'tray calendar shares title sort');
+  await assertOrder(tray, '.tray-scroll', ['other-parent', 'parent'], 'tray calendar title pending order');
   report.views.push({ page: 'tray-calendar-after-title', completedRoots: await rows(tray, '.tray-scroll', ['root-old', 'root-new']) });
   await click(tray, '[data-action="tray-page"][data-value="tasks"]');
-  assert.equal(await tray.evaluate('document.querySelector("#tray-sort").value'), 'title');
-  await change(tray, '#tray-sort', 'asc'); await click(tray, '[data-action="tray-page"][data-value="calendar"]');
-  await assertOrder(tray, '.tray-scroll', ['other-parent', 'parent'], 'tray calendar ignores ascending sort');
+  assert.equal(await tray.evaluate('document.querySelector("#task-sort").value'), 'title');
+  await change(tray, '#task-sort', 'asc'); await click(tray, '[data-action="tray-page"][data-value="calendar"]');
+  await assertOrder(tray, '.tray-scroll', ['parent', 'other-parent'], 'tray calendar shares ascending sort');
   await navigate(main, 'inbox'); await select(main, 'parent');
   await assertOrder(main, '#left', fixture.children, 'main child order'); await assertOrder(main, '#detail', fixture.children, 'detail child order');
   editor = await openEditor(app, 'parent'); await assertOrder(editor, '.floating-content', fixture.children, 'floating child order');
@@ -226,7 +226,7 @@ test('task ordering, synthetic drag persistence and compact editor controls agre
     await until(() => editor.evaluate(`document.documentElement.dataset.theme===${JSON.stringify(theme)}`));
     await delay(150);
     for (const [client, floating, name] of [[main, false, 'main-narrow'], [editor, true, 'floating-400']]) {
-      const layout = await measureControls(client, floating); assertControls(layout);
+      const layout = await measureControls(client, floating); assertControls(layout);if(!floating)assert.ok(layout.search&&layout.search.width>=100,'task search field must remain usable at narrow width');
       report.geometry.push({ theme, name, ...layout }); await screenshot(client, name + '-' + theme + '-200');
     }
   }
@@ -264,4 +264,56 @@ test('task ordering, synthetic drag persistence and compact editor controls agre
   fs.writeFileSync(path.join(proof, 'report.json'), JSON.stringify(report, null, 2));
   editor.close(); editor = null; await quit(app); app = null;
   t.diagnostic('Synthetic drag and DPI screenshots: ' + proof);
+});
+
+test('shared sorting, group pin and root drag persist across windows and restart', { timeout: 90000 }, async t => {
+  fs.mkdirSync(tempRoot, { recursive: true });
+  const dir=fs.mkdtempSync(path.join(tempRoot,'task-pin-ui-'));seed(dir);
+  let app;
+  t.after(async()=>{if(app?.proc.exitCode===null){app.proc.kill();await timeout(app.done,2500)}for(const c of [app?.main,app?.tray])try{c?.close()}catch{}assert.equal(path.dirname(path.resolve(dir)),tempRoot);fs.rmSync(dir,{recursive:true,force:true})});
+  app=await launch(dir);let {main,tray}=app;
+  await navigate(main,'inbox');const runtime=await invoke(main,'settings:get');await change(main,'#task-sort','asc');
+  assert.equal(await main.evaluate('document.querySelector(".version")?.textContent'),`v${runtime.version}`,'sort changes preserve runtime version');
+  await until(()=>tray.evaluate('document.querySelector("#task-sort")?.value === "asc"'),10000,'tray receives persisted sort');
+  await assertOrder(main,'#left',['parent','other-parent'],'main ascending order');
+  await assertOrder(tray,'.tray-scroll',['parent','other-parent'],'tray ascending order');
+  await select(main,'child-new');await click(main,'#detail [data-action=pin]');
+  await until(async()=>(await invoke(main,'tasks:list')).tasks.find(x=>x.id==='parent')?.pinned===1,10000,'child pins parent');
+  await until(()=>tray.evaluate('Boolean(document.querySelector(".tray-scroll [data-id=parent] .task-pinned-mark"))'),10000,'tray receives pin');
+  assert.equal((await invoke(main,'tasks:list')).tasks.find(x=>x.id==='child-new').priority,3,'existing priority retained');
+  await select(main,'parent');await click(main,'#detail [data-action=toggle]');
+  await until(async()=>{const p=(await invoke(main,'tasks:list')).tasks.find(x=>x.id==='parent');return p?.completed_at!=null&&p.pinned===0},10000,'completion unpins parent');
+  await click(main,'#detail [data-action=toggle]');await until(async()=>(await invoke(main,'tasks:list')).tasks.find(x=>x.id==='parent')?.completed_at==null,10000,'parent reopened');
+  await change(main,'#task-sort','desc');await assertOrder(main,'#left',['other-parent','parent'],'before root drag');
+  await drag(main,'parent','other-parent',{valid:true});
+  await until(async()=>(await invoke(main,'settings:get')).taskSort==='manual',10000,'drag switches shared sort');
+  await assertOrder(main,'#left',['parent','other-parent'],'main manual order');
+  await until(()=>tray.evaluate('document.querySelector("#task-sort")?.value === "manual"'),10000,'tray receives manual sort');
+  await assertOrder(tray,'.tray-scroll',['parent','other-parent'],'tray manual order');
+  const visible=await main.evaluate('Array.from(document.querySelectorAll("#left .task-row")).map(n=>n.dataset.id)');
+  assert.ok(visible.indexOf('child-new')>visible.indexOf('parent')&&visible.indexOf('child-new')<visible.indexOf('other-parent'),'children move with root');
+  await quit(app);app=null;app=await launch(dir);main=app.main;tray=app.tray;
+  await navigate(main,'inbox');assert.equal((await invoke(main,'settings:get')).taskSort,'manual');
+  await assertOrder(main,'#left',['parent','other-parent'],'main manual order after restart');
+  await assertOrder(tray,'.tray-scroll',['parent','other-parent'],'tray manual order after restart');
+  await quit(app);app=null;
+});
+
+test('completion provides exit and entry animation for collapsed groups and respects reduced motion', {timeout:60000}, async t=>{
+ fs.mkdirSync(tempRoot,{recursive:true});const dir=fs.mkdtempSync(path.join(tempRoot,'task-motion-ui-'));
+ const store=new TaskStore(path.join(dir,'tasks.sqlite'));const parent=store.create({title:'Motion parent'}),child=store.create({title:'Motion child',parent_id:parent.id}),done=store.create({title:'Already completed'});store.setCompleted(done.id,true);store.close();let app;
+ t.after(async()=>{if(app?.proc.exitCode===null){app.proc.kill();await timeout(app.done,2500)}for(const c of [app?.main,app?.tray])try{c?.close()}catch{}assert.equal(path.dirname(path.resolve(dir)),tempRoot);fs.rmSync(dir,{recursive:true,force:true})});
+ app=await launch(dir);const main=app.main;await navigate(main,'inbox');await select(main,parent.id);
+ await main.evaluate(`(()=>{window.__motion=[];const original=Element.prototype.animate;Element.prototype.animate=function(frames,options){if(this.classList?.contains('task-row'))window.__motion.push({id:this.dataset.id,ghost:this.getAttribute('aria-hidden')==='true',frames});return original.call(this,frames,options)};return true})()`);
+ await click(main,'[data-action=show-completed]');
+ await click(main,'#detail [data-action=toggle]');
+ await until(()=>main.evaluate(`window.__motion.some(x=>x.id===${JSON.stringify(parent.id)}&&x.ghost)`),10000,'collapsed completion exit');
+ assert.ok(await main.evaluate(`window.__motion.some(x=>x.id===${JSON.stringify(child.id)}&&x.ghost)`),'visible child exits with parent');
+ await main.evaluate('window.__motion=[]');await click(main,'#detail [data-action=toggle]');
+ await until(()=>main.evaluate(`window.__motion.some(x=>x.id===${JSON.stringify(parent.id)}&&!x.ghost)`),10000,'restore entry');
+ assert.ok(await main.evaluate(`window.__motion.some(x=>x.id===${JSON.stringify(child.id)}&&!x.ghost)`),'child enters with parent');
+ await main.send('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});await main.evaluate('window.__motion=[]');
+ await click(main,'#detail [data-action=toggle]');await until(async()=>(await invoke(main,'tasks:list')).tasks.find(x=>x.id===parent.id)?.completed_at!=null,10000,'reduced motion toggle');await delay(100);
+ assert.deepEqual(await main.evaluate('window.__motion'),[],'reduced motion suppresses entry and exit animation');
+ await quit(app);app=null;
 });

@@ -268,7 +268,8 @@ test('Electron: task calendar, review order and tray selection and context menu'
 
   await tray.evaluate(`(()=>{const r=document.querySelector(${JSON.stringify(row(ids.parent.id))});r.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,button:2,clientX:50,clientY:50}));return true})()`);
   const actions=await tray.evaluate(`[...document.querySelectorAll('#task-context-root [role="menuitem"]')].map(x=>x.dataset.action)`);
-  assert.deepEqual(actions,['ctx-edit','ctx-add-child','ctx-toggle','ctx-delete']);
+  assert.deepEqual(actions,['ctx-edit','ctx-add-child','ctx-toggle','ctx-pin','ctx-delete']);
+  assert.match(await tray.evaluate("document.querySelector('[data-action=ctx-pin]').textContent"), /置顶/);
   await tray.evaluate(`HTMLMediaElement.prototype.play=()=>Promise.resolve();true`);
   await click(tray,'[data-action="ctx-toggle"]');
   await until(async()=>{const ts=(await invoke(tray,'tasks:list')).tasks;return ts.find(x=>x.id===ids.parent.id)?.completed_at&&ts.find(x=>x.id===ids.child.id)?.completed_at},10000,'context completion');

@@ -36,3 +36,19 @@ test('rejects asset/path spoofing, missing checksum, and untrusted redirect',asy
  assert.throws(()=>checksumFor(digest+'  other.zip',name),/missing/);
  await assert.rejects(trustedFetch(prefix+'download/'+tag+'/'+name,{fetchImpl:async()=>new Response(null,{status:302,headers:{location:'https://example.org/evil.zip'}})}),/Untrusted/);
 });
+
+test('startup and manual checks share one request and publish available version without downloading',async t=>{
+ let count=0,resolveFetch;const events=[];
+ const f=fixture(t,{onProgress:value=>events.push(value),fetchImpl:async url=>{count++;assert.match(url,/^https:\/\/api\.github\.com\//);return await new Promise(resolve=>{resolveFetch=resolve;});}});
+ const silent=f.manager.check(),manual=f.manager.check();assert.equal(count,1);assert.equal(f.manager.status().checkStatus,'checking');
+ resolveFetch({ok:true,json:async()=>[release()]});const [one,two]=await Promise.all([silent,manual]);
+ assert.deepEqual(one,two);const s=f.manager.status();assert.equal(s.checkStatus,'update-available');assert.equal(s.availableVersion,tag);assert.equal(s.canDownload,true);assert.equal(s.phase,'idle');assert.equal(s.canInstall,false);assert.equal(f.prepared(),0);assert.equal(fs.existsSync(path.join(f.dir,'updates')),false);assert.equal(events.at(-1).checkStatus,'update-available');
+});
+test('offline and incompatible release checks remain non-blocking and do not advertise a download',async t=>{
+ const f=fixture(t,{fetchImpl:async()=>{throw Error('offline')}});assert.equal((await f.manager.check()).status,'error');assert.equal(f.manager.status().checkStatus,'error');assert.equal(f.manager.status().canDownload,false);assert.equal(f.manager.status().phase,'idle');
+ f.manager.fetch=async()=>({ok:true,json:async()=>[{...release(),assets:[]}]});assert.equal((await f.manager.check()).status,'no-windows-asset');assert.equal(f.manager.status().canDownload,false);
+ f.manager.fetch=async()=>({ok:true,json:async()=>[release()]});f.manager.version='0.1.3-win.2';assert.equal((await f.manager.check()).status,'up-to-date');assert.equal(f.manager.status().canDownload,false);
+});
+test('checking update never resets ongoing download state',async t=>{
+ const f=fixture(t);f.manager.publish({phase:'downloading',percent:51});await f.manager.check();assert.equal(f.manager.status().phase,'downloading');assert.equal(f.manager.status().percent,51);
+});

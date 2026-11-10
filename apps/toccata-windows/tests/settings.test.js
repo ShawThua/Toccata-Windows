@@ -16,3 +16,13 @@ test('setting mutations reject coercions, invalid enums and arbitrary keys',()=>
  assert.equal(validateSetting('hydrationInterval',32768),32768);assert.equal(validateSetting('trayDefaultPage','activity'),'activity');assert.equal(validateSetting('hideTaskbar',true),true);
  assert.equal(SETTINGS_KEYS.includes('launchAtLogin'),false,'system login changes use the dedicated platform command');
 });
+test('task sort is shared through validated preferences and old settings keep their original default',()=>{
+ assert.equal(normalizeSettings({theme:'dark'}).taskSort,'desc');
+ for(const mode of ['manual','desc','asc','title','planned']){
+  assert.equal(validateSetting('taskSort',mode),mode);
+  assert.equal(normalizeSettings({taskSort:mode}).taskSort,mode);
+ }
+ assert.equal(normalizeSettings({taskSort:'invalid'}).taskSort,'desc');
+ assert.throws(()=>validateSetting('taskSort','invalid'));
+ assert.ok(SETTINGS_KEYS.includes('taskSort'));
+});
